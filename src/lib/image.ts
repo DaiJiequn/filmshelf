@@ -1,3 +1,4 @@
+import { isRawFile, rawToJpeg } from './raw';
 import { db, uid } from '../db/schema';
 
 /** 压缩成最长边 ~600px 的 JPEG，缩略图足够，体积小，备份也轻 */
@@ -71,7 +72,9 @@ export async function tiffToJpeg(file: File): Promise<Blob> {
 
 /** 导入一张扫描件：生成查看用大图 + 缩略图，返回两个 Photo 的 id */
 export async function importScan(input: File, quality: ScanQuality): Promise<{ photoId: string; thumbId: string; width: number; height: number }> {
-  const file: Blob = isTiff(input) ? await tiffToJpeg(input) : input;
+  let file: Blob = input;
+  if (isRawFile(input)) file = await rawToJpeg(input);
+  else if (isTiff(input)) file = await tiffToJpeg(input);
   const thumb = await compressImage(file, 480, 0.8);
   let full: { blob: Blob; width: number; height: number };
   if (quality === 'original') {

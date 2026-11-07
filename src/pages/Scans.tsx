@@ -41,7 +41,7 @@ export default function Scans() {
     const res = await addFrames(id, [...files], settings.scanQuality, (done, total) => setProgress({ done, total }));
     setProgress(null);
     if (res.failed.length) {
-      toast.show(`导入 ${res.added} 张，${res.failed.length} 张失败（${res.failed.slice(0, 2).join('、')}${res.failed.length > 2 ? '…' : ''}）。TIFF 等浏览器不能解码的格式请先转成 JPG。`, { tone: 'error' });
+      toast.show(`导入 ${res.added} 张，${res.failed.length} 张失败（${res.failed.slice(0, 2).join('、')}${res.failed.length > 2 ? '…' : ''}）。可能是文件损坏或格式不支持。`, { tone: 'error' });
     } else {
       toast.show(`已导入 ${res.added} 张扫描件`);
     }
@@ -67,7 +67,7 @@ export default function Scans() {
         back
         right={<button className="btn small primary" disabled={!!progress} onClick={() => fileRef.current?.click()}>＋ 导入</button>}
       />
-      <input ref={fileRef} type="file" accept="image/*,.tif,.tiff" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
+      <input ref={fileRef} type="file" accept="image/*,.tif,.tiff,.3fr,.fff,.arw,.cr2,.cr3,.crw,.dng,.nef,.nrw,.orf,.pef,.raf,.rw2,.rwl,.srw,.iiq,.erf,.mrw,.kdc,.dcr,.raw,.x3f" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
 
       {progress && (
         <div className="card progress-import" role="status">

@@ -1,6 +1,6 @@
 {
   "name": "film-shelf",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "胶卷柜 个人胶卷管理",
   "main": "electron/main.cjs",
   "scripts": {
@@ -19,6 +19,7 @@
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
     "electron-updater": "^6.8.11",
+    "libraw-wasm": "^1.6.0",
     "motion": "^14.10.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
