@@ -52,8 +52,26 @@ export const SCAN_QUALITY_LABEL: Record<ScanQuality, string> = {
   original: '原图（不压缩，占空间大）',
 };
 
+const isTiff = (f: File) => /\.tiff?$/i.test(f.name) || f.type === 'image/tiff';
+
+/** 浏览器不能直接解码 TIFF（Filmer 等扫描软件常导出）：用 UTIF（MIT）解码后转成高质量 JPEG */
+export async function tiffToJpeg(file: File): Promise<Blob> {
+  const UTIF = (await import('utif')).default;
+  const buf = await file.arrayBuffer();
+  const ifds = UTIF.decode(buf);
+  if (!ifds.length) throw new Error('无法读取 TIFF');
+  UTIF.decodeImage(buf, ifds[0]);
+  const { width, height } = ifds[0] as { width: number; height: number };
+  const rgba = UTIF.toRGBA8(ifds[0]);
+  const c = document.createElement('canvas');
+  c.width = width; c.height = height;
+  c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, rgba.length), width, height), 0, 0);
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('TIFF 转换失败'))), 'image/jpeg', 0.95));
+}
+
 /** 导入一张扫描件：生成查看用大图 + 缩略图，返回两个 Photo 的 id */
-export async function importScan(file: File, quality: ScanQuality): Promise<{ photoId: string; thumbId: string; width: number; height: number }> {
+export async function importScan(input: File, quality: ScanQuality): Promise<{ photoId: string; thumbId: string; width: number; height: number }> {
+  const file: Blob = isTiff(input) ? await tiffToJpeg(input) : input;
   const thumb = await compressImage(file, 480, 0.8);
   let full: { blob: Blob; width: number; height: number };
   if (quality === 'original') {

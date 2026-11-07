@@ -1,6 +1,6 @@
 {
   "name": "film-shelf",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "胶卷柜 个人胶卷管理",
   "main": "electron/main.cjs",
   "scripts": {
@@ -22,7 +22,8 @@
     "motion": "^14.10.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.5"
+    "react-router-dom": "^7.18.5",
+    "utif": "^3.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

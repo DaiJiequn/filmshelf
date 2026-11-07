@@ -67,7 +67,7 @@ export default function Scans() {
         back
         right={<button className="btn small primary" disabled={!!progress} onClick={() => fileRef.current?.click()}>＋ 导入</button>}
       />
-      <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
+      <input ref={fileRef} type="file" accept="image/*,.tif,.tiff" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
 
       {progress && (
         <div className="card progress-import" role="status">
