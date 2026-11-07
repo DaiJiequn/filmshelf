@@ -383,3 +383,6 @@ button.menu-row { background: none; }
   .dev-top { grid-column: 1 / -1; }
   .dev-panel { max-height: none; border-top: 0; border-left: 1px solid #2d2621; }
 }
+.dev-canvas.picking { cursor: crosshair; outline: 2px dashed var(--accent); }
+.dev-pickhint { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: rgba(0,0,0,.75); color: #f3eadc; padding: 6px 12px; border-radius: 999px; font-size: 13px; pointer-events: none; }
+.dev-adv { align-self: flex-start; color: var(--accent); font-weight: 700; font-size: 13px; min-height: 32px; }
