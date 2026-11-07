@@ -3,10 +3,30 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: [main]
 permissions:
   contents: write
 jobs:
+  # 推送到 main 时：只有 package.json 里的版本号还没发布过，才构建并发布（改版本号 = 发新版）
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      needed: ${{ steps.c.outputs.needed }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: c
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "branch" ] && gh release view "v$VER" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
   build:
+    needs: check
+    if: needs.check.outputs.needed == 'true'
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
