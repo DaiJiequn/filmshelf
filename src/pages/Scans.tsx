@@ -160,6 +160,11 @@ function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, 
   src?: string; thumb?: string; alt: string; compareSrc?: string;
   onPrev: () => void; onNext: () => void; onClose: () => void; onTap: () => void; onScale: (s: number) => void;
 }) {
+  const level = useMotionLevel();
+  const raf = useRef(0);
+  const vel = useRef({ x: 0, y: 0, t: 0 });
+  const stopCoast = () => { if (raf.current) { cancelAnimationFrame(raf.current); raf.current = 0; } };
+  useEffect(() => stopCoast, []);
   const box = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const [view, setViewState] = useState<ZoomView>({ s: 1, x: 0, y: 0 });
@@ -206,6 +211,7 @@ function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, 
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      stopCoast();
       const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0022));
       const n = zoomAt(rel(e.clientX, e.clientY), v.current.s * f);
       set(n.s <= 1.01 ? { s: 1, x: 0, y: 0 } : clamp(n));
@@ -226,8 +232,29 @@ function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, 
     return () => window.removeEventListener('keydown', onKey);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** 松手后的惯性滑行：速度按指数衰减，撞到边缘就停在那一侧 */
+  const coast = () => {
+    let { x: vx, y: vy } = vel.current;
+    let last = performance.now();
+    setAnim(false);
+    const step = (now: number) => {
+      const dt = Math.min(34, now - last); last = now;
+      const cur = v.current, { mx, my } = bounds(cur.s);
+      let x = cur.x + vx * dt, y = cur.y + vy * dt;
+      if (x > mx) { x = mx; vx = 0; } else if (x < -mx) { x = -mx; vx = 0; }
+      if (y > my) { y = my; vy = 0; } else if (y < -my) { y = -my; vy = 0; }
+      const k = Math.exp(-dt / 320);
+      vx *= k; vy *= k;
+      set({ s: cur.s, x, y });
+      raf.current = Math.hypot(vx, vy) > 0.02 ? requestAnimationFrame(step) : 0;
+    };
+    raf.current = requestAnimationFrame(step);
+  };
+
   const down = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    stopCoast();
+    vel.current = { x: 0, y: 0, t: 0 };
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.current.size === 1) gesture.current = { moved: 0, gx: 0, gy: 0, t: Date.now(), axis: '' };
     if (ptrs.current.size === 2) {
@@ -255,6 +282,9 @@ function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, 
     const g = gesture.current;
     g.moved += Math.abs(dx) + Math.abs(dy);
     if (v.current.s > 1.01) {
+      const now = performance.now();
+      const dt = Math.max(1, now - (vel.current.t || now - 16));
+      vel.current = { x: 0.7 * (dx / dt) + 0.3 * vel.current.x, y: 0.7 * (dy / dt) + 0.3 * vel.current.y, t: now };
       set({ s: v.current.s, x: v.current.x + dx, y: v.current.y + dy });
       return;
     }
@@ -272,7 +302,13 @@ function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, 
     pinch.current = null;
     const g = gesture.current;
     const isTap = g.moved < 8 && Date.now() - g.t < 350;
-    if (v.current.s > 1.01 && !isTap) { set(clamp(v.current), true); return; }
+    if (v.current.s > 1.01 && !isTap) {
+      const cur = v.current, c = clamp(cur);
+      const sp = Math.hypot(vel.current.x, vel.current.y);
+      const fresh = performance.now() - vel.current.t < 90; // 停住再松手就不滑行
+      if (level !== 'off' && fresh && sp > 0.25 && c.x === cur.x && c.y === cur.y) coast(); else set(c, true);
+      return;
+    }
     if (v.current.s < 1.01) {
       if (g.axis === 'x' && Math.abs(g.gx) > 70) { set({ s: 1, x: 0, y: 0 }, true); g.gx < 0 ? onNext() : onPrev(); return; }
       if (g.axis === 'y' && g.gy > 110) { onClose(); return; }

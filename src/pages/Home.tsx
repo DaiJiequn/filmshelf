@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { CountUp } from '../components/NumberRoll';
 import { Canister } from '../components/Canister';
 import { PageHeader } from '../components/PageHeader';
 import { RollCard } from '../components/RollCard';
@@ -80,7 +81,7 @@ export default function Home() {
       )}
 
       <motion.section className="section" {...list(1)}>
-        <h2>在机 <small>{loaded.length}/{cameras.length}</small></h2>
+        <h2>在机 <small><CountUp value={loaded.length} />/{cameras.length}</small></h2>
         {cameras.length === 0 && (
           <div className="card soft-note">还没有相机。<button className="link" onClick={() => sheets.openCamera()}>添加相机</button></div>
         )}
@@ -102,7 +103,7 @@ export default function Home() {
                     <Canister stock={s} size={34} />
                     <div>
                       <div className="roll-title">{s.name}</div>
-                      <div className="muted small">在机 {daysBetween(r.loadedAt ?? r.updatedAt, now)} 天 · ISO {r.shotIso ?? s.iso}</div>
+                      <div className="muted small">在机 <CountUp value={daysBetween(r.loadedAt ?? r.updatedAt, now)} /> 天 · ISO {r.shotIso ?? s.iso}</div>
                     </div>
                   </button>
                 ) : (
@@ -121,7 +122,7 @@ export default function Home() {
 
       {shot.length > 0 && (
         <motion.section className="section" {...list(2)}>
-          <h2>待冲 <small>{shot.length} 卷</small></h2>
+          <h2>待冲 <small><CountUp value={shot.length} /> 卷</small></h2>
           <div className="card row-card">
             <div className="stack-canisters">
               {shot.slice(0, 4).map((r) => <Canister key={r.id} stock={stockOf(r.stockId)} size={26} />)}
@@ -134,7 +135,7 @@ export default function Home() {
 
       {activeVisits.length > 0 && (
         <motion.section className="section" {...list(3)}>
-          <h2>在冲 <small>{atLab.length} 卷</small></h2>
+          <h2>在冲 <small><CountUp value={atLab.length} /> 卷</small></h2>
           {activeVisits.map((v) => {
             const vr = atLab.filter((r) => r.labVisitId === v.id);
             const lab = labs.find((l) => l.id === v.labId);
@@ -148,7 +149,7 @@ export default function Home() {
                 <div className="grow">
                   <strong>{lab?.name ?? '冲洗店'}</strong>
                   <div className={`small ${late ? 'txt-warn' : 'muted'}`}>
-                    {vr.length} 卷 · 已等 {days} 天{v.expectedAt ? ` · 预计 ${v.expectedAt.slice(5).replace('-', '/')}` : ''}
+                    {vr.length} 卷 · 已等 <CountUp value={days} /> 天{v.expectedAt ? ` · 预计 ${v.expectedAt.slice(5).replace('-', '/')}` : ''}
                   </div>
                 </div>
                 <button className="btn small primary" onClick={() => sheets.quickReturn(vr.map((r) => r.id))}>取回</button>
@@ -160,7 +161,7 @@ export default function Home() {
 
       {expiring.length > 0 && (
         <motion.section className="section" {...list(4)}>
-          <h2>快过期 <small>{expiring.length} 卷</small></h2>
+          <h2>快过期 <small><CountUp value={expiring.length} /> 卷</small></h2>
           <div className="list">
             {expiring.slice(0, 5).map((r) => (
               <RollCard key={r.id} roll={r} stock={stockOf(r.stockId)} warnMonths={settings.expiryWarnMonths} />

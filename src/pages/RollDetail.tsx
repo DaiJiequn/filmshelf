@@ -49,9 +49,12 @@ export default function RollDetail() {
   const status = data?.roll?.status;
   const prevStatus = useRef<string | undefined>(undefined);
   const [flash, setFlash] = useState('');
+  const [lid, setLid] = useState(0);
+  const popLid = () => { setLid(9); window.setTimeout(() => setLid(0), 650); };
   useEffect(() => {
     if (prevStatus.current && status && prevStatus.current !== status) {
       setFlash(STATUS_LABEL[status]);
+      popLid();
       const t = setTimeout(() => setFlash(''), 1700);
       prevStatus.current = status;
       return () => clearTimeout(t);
@@ -96,6 +99,7 @@ export default function RollDetail() {
         <div className="hero-glow" />
         <Canister
           stock={stock}
+          lid={level === 'off' ? 0 : lid}
           size={92}
           expired={expired}
           sealed={roll.keepSealed && roll.status === 'stock'}

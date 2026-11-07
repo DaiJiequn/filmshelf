@@ -9,12 +9,14 @@ interface Props {
   /** 图鉴未点亮：灰色剪影 */
   unlit?: boolean;
   sealed?: boolean;
+  /** 瓶盖抬起的高度（视图单位，0 为合上）；有变化时带弹性动画 */
+  lid?: number;
   className?: string;
   style?: React.CSSProperties;
 }
 
 /** 手绘风 135 胶卷罐（SVG）。品牌色由 brandColors 决定。 */
-export function Canister({ stock, size = 64, expired, unlit, sealed, className = '', style }: Props) {
+export function Canister({ stock, size = 64, expired, unlit, sealed, lid = 0, className = '', style }: Props) {
   const gid = useId().replace(/:/g, '');
   const c = brandColors(stock?.brand ?? '');
   const name = stock?.name ?? '';
@@ -37,11 +39,13 @@ export function Canister({ stock, size = 64, expired, unlit, sealed, className =
           <stop offset="1" stopColor="#000" stopOpacity=".42" />
         </linearGradient>
       </defs>
-      {/* spool tip */}
-      <rect x="35" y="2" width="10" height="9" rx="2" fill="#8a8178" />
-      <rect x="37" y="0" width="6" height="4" rx="1.5" fill="#a39a90" />
-      {/* top cap */}
-      <rect x="12" y="10" width="56" height="12" rx="5" fill="#6d665f" />
+      <g style={{ transform: `translateY(${-lid}px) rotate(${lid ? -6 : 0}deg)`, transformOrigin: '14px 22px', transition: 'transform .45s cubic-bezier(.3,1.7,.5,1)' }}>
+        {/* spool tip */}
+        <rect x="35" y="2" width="10" height="9" rx="2" fill="#8a8178" />
+        <rect x="37" y="0" width="6" height="4" rx="1.5" fill="#a39a90" />
+        {/* top cap */}
+        <rect x="12" y="10" width="56" height="12" rx="5" fill="#6d665f" />
+      </g>
       {/* body */}
       <rect x="14" y="20" width="52" height="82" rx="3" fill={unlit ? '#4a4540' : c.body} />
       {/* label */}
