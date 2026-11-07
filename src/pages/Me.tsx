@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { useSheets } from '../components/SheetHost';
 import { useToast } from '../components/Toast';
 import { Empty, Segmented, Stepper } from '../components/ui';
+import { AutoBackupCard } from '../components/AutoBackupCard';
 import { clearAll, estimateBackupSize, exportBackupBlob, importBackup, markBackedUp } from '../db/backup';
 import { SCAN_QUALITY_LABEL } from '../lib/image';
 import { db, uid } from '../db/schema';
@@ -259,6 +260,7 @@ export function Backup() {
         <p>数据只保存在这台设备的浏览器里。清理浏览器数据或卸载桌面图标可能导致丢失，请定期导出备份。</p>
         <p className="muted small">上次备份：{settings.lastBackupAt ? fmtDate(settings.lastBackupAt) : '从未'}</p>
       </div>
+      <AutoBackupCard />
       {sizes && sizes.withScans > sizes.withoutScans + 1000 && (
         <div className="card note-card">
           <div className="seg" role="radiogroup" aria-label="备份内容">

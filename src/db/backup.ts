@@ -49,7 +49,7 @@ async function dumpPhoto(p: Photo): Promise<PhotoDump> {
 }
 
 /** 逐张拼接成 Blob，避免一次性生成超大字符串。withScans=false 时不含扫描件（备份小很多）。 */
-export async function exportBackupBlob(withScans: boolean): Promise<Blob> {
+export async function buildHead(withScans: boolean) {
   const frames = await db.frames.toArray();
   const scanPhotoIds = new Set(frames.flatMap((f) => [f.photoId, f.thumbId, ...(f.origPhotoId ? [f.origPhotoId] : [])]));
   const head = {
@@ -66,6 +66,11 @@ export async function exportBackupBlob(withScans: boolean): Promise<Blob> {
     settings: (await db.settings.toArray()).filter((s) => s.key !== 'lastBackupAt'),
     frames: withScans ? frames : [],
   };
+  return { head, scanPhotoIds };
+}
+
+export async function exportBackupBlob(withScans: boolean): Promise<Blob> {
+  const { head, scanPhotoIds } = await buildHead(withScans);
   const parts: string[] = [JSON.stringify(head).slice(0, -1) + ',"photos":['];
   let first = true;
   for (const id of await db.photos.toCollection().primaryKeys()) {
@@ -117,6 +122,11 @@ export async function importBackup(file: unknown): Promise<void> {
     id: p.id, width: p.width, height: p.height,
     blob: new Blob([base64ToBytes(p.data) as BlobPart], { type: p.type }),
   }));
+  await applyBackup(file, photos);
+}
+
+/** 把备份内容写入数据库（photos 已解码为 Blob）。文件夹备份也走这里。 */
+export async function applyBackup(file: BackupFile, photos: Photo[]): Promise<void> {
   const rollIds = new Set((file.rolls as { id: string }[]).map((r) => r.id));
   await db.transaction('rw', ALL(), async () => {
     const keep = file.includesScans === false || (file.schemaVersion < 2)
