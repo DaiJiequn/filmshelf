@@ -9,6 +9,8 @@ import { useSheets } from '../components/SheetHost';
 import { Empty, Stars } from '../components/ui';
 import { deleteRoll, updateRoll } from '../db/actions';
 import { db } from '../db/schema';
+import { Thumb } from './Scans';
+import { useGo } from '../lib/nav';
 import { expiryState, expiryText } from '../domain/expiry';
 import { PRIMARY_ACTION_LABEL, STATUS_LABEL, STATUS_ORDER } from '../domain/roll-state';
 import { fmtDate, fmtMoney, FORMAT_LABEL, useSettings } from '../lib/hooks';
@@ -19,6 +21,7 @@ import { COND_LABEL, SCAN_LABEL } from '../components/SheetHost';
 export default function RollDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const go = useGo();
   const sheets = useSheets();
   const toast = useToast();
   const level = useMotionLevel();
@@ -34,15 +37,16 @@ export default function RollDetail() {
       roll.labVisitId ? db.labVisits.get(roll.labVisitId) : undefined,
       roll.locationId ? db.locations.get(roll.locationId) : undefined,
     ]);
+    const frames = await db.frames.where('rollId').equals(id).sortBy('order');
     const lab = visit ? await db.labs.get(visit.labId) : undefined;
-    return { roll, stock, camera, visit, lab, location };
+    return { roll, stock, camera, visit, lab, location, frames };
   }, [id]);
 
   const [note, setNote] = useState('');
   useEffect(() => { setNote(data?.roll?.note ?? ''); }, [data?.roll?.id, data?.roll?.note]);
 
   if (!data) return <div className="page" />;
-  const { roll, stock, camera, visit, lab, location } = data;
+  const { roll, stock, camera, visit, lab, location, frames } = data;
   if (!roll) {
     return (
       <div className="page">
@@ -149,6 +153,18 @@ export default function RollDetail() {
             <p className="muted">还没记录这卷底片放在哪里。</p>
           )}
           <button className="btn ghost" onClick={() => sheets.openNeg(roll.id)}>{roll.neg ? '编辑底片保存' : '记录底片保存'}</button>
+        </section>
+      )}
+
+      {(roll.status === 'back' || roll.status === 'archived') && (
+        <section className="section">
+          <h2>扫描件 <small>{frames?.length ?? 0} 张</small></h2>
+          {frames && frames.length > 0 && (
+            <div className="scan-preview">
+              {frames.slice(0, 6).map((f) => <div key={f.id} className="scan-cell"><Thumb photoId={f.thumbId} /></div>)}
+            </div>
+          )}
+          <button className="btn ghost" onClick={() => go(`/roll/${roll.id}/scans`)}>{frames && frames.length ? '查看全部 / 继续导入' : '导入扫描件'}</button>
         </section>
       )}
 

@@ -1,7 +1,7 @@
 import { db, uid } from '../db/schema';
 
 /** 压缩成最长边 ~600px 的 JPEG，缩略图足够，体积小，备份也轻 */
-export async function compressImage(file: File, maxSide = 600): Promise<{ blob: Blob; width: number; height: number }> {
+export async function compressImage(file: Blob, maxSide = 600, quality = 0.82): Promise<{ blob: Blob; width: number; height: number }> {
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
   const w = Math.max(1, Math.round(bmp.width * scale));
@@ -12,7 +12,7 @@ export async function compressImage(file: File, maxSide = 600): Promise<{ blob: 
   canvas.getContext('2d')!.drawImage(bmp, 0, 0, w, h);
   bmp.close?.();
   const blob: Blob = await new Promise((res, rej) =>
-    canvas.toBlob((b) => (b ? res(b) : rej(new Error('图片压缩失败'))), 'image/jpeg', 0.82),
+    canvas.toBlob((b) => (b ? res(b) : rej(new Error('图片压缩失败'))), 'image/jpeg', quality),
   );
   return { blob, width: w, height: h };
 }
@@ -43,3 +43,31 @@ export function brandColors(brand: string): { body: string; label: string; ink: 
 }
 
 export const TYPE_LABEL = { 'color-neg': '彩色负片', bw: '黑白', slide: '反转片', cine: '电影卷' } as const;
+
+
+export type ScanQuality = 'standard' | 'high' | 'original';
+export const SCAN_QUALITY_LABEL: Record<ScanQuality, string> = {
+  standard: '标准（最长边 2400px）',
+  high: '高（最长边 4000px）',
+  original: '原图（不压缩，占空间大）',
+};
+
+/** 导入一张扫描件：生成查看用大图 + 缩略图，返回两个 Photo 的 id */
+export async function importScan(file: File, quality: ScanQuality): Promise<{ photoId: string; thumbId: string; width: number; height: number }> {
+  const thumb = await compressImage(file, 480, 0.8);
+  let full: { blob: Blob; width: number; height: number };
+  if (quality === 'original') {
+    const bmp = await createImageBitmap(file);
+    full = { blob: file, width: bmp.width, height: bmp.height };
+    bmp.close?.();
+  } else {
+    full = await compressImage(file, quality === 'high' ? 4000 : 2400, 0.88);
+  }
+  const photoId = uid();
+  const thumbId = uid();
+  await db.photos.bulkAdd([
+    { id: photoId, blob: full.blob, width: full.width, height: full.height },
+    { id: thumbId, blob: thumb.blob, width: thumb.width, height: thumb.height },
+  ]);
+  return { photoId, thumbId, width: full.width, height: full.height };
+}

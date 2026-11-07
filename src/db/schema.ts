@@ -61,6 +61,23 @@ export interface Roll {
   updatedAt: string;
 }
 
+/** 一张扫描件（电子版底片）。photoId 为查看用大图，thumbId 为缩略图。 */
+export interface Frame {
+  id: string;
+  rollId: string;
+  order: number; // 在这一卷里的顺序，显示张号 = order + 1
+  photoId: string;
+  thumbId: string;
+  width: number;
+  height: number;
+  shutter?: string; // 例如 1/125
+  aperture?: string; // 例如 f/2.8
+  focal?: string; // 例如 50mm
+  place?: string;
+  note?: string;
+  createdAt: string;
+}
+
 export interface Camera {
   id: string;
   name: string;
@@ -113,6 +130,7 @@ export class FilmDB extends Dexie {
   labVisits!: Table<LabVisit, string>;
   locations!: Table<Location, string>;
   photos!: Table<Photo, string>;
+  frames!: Table<Frame, string>;
   settings!: Table<Setting, string>;
 
   constructor(name = 'film-shelf') {
@@ -127,6 +145,7 @@ export class FilmDB extends Dexie {
       photos: 'id',
       settings: 'key',
     });
+    this.version(2).stores({ frames: 'id, rollId, order' });
   }
 }
 

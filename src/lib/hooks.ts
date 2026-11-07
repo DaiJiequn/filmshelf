@@ -7,10 +7,11 @@ export interface Settings {
   motionLevel: 'full' | 'lite' | 'off';
   currency: string;
   expiryWarnMonths: number;
+  scanQuality: 'standard' | 'high' | 'original';
   lastBackupAt?: string;
 }
 
-export const DEFAULT_SETTINGS: Settings = { motionLevel: 'full', currency: 'JPY', expiryWarnMonths: 3 };
+export const DEFAULT_SETTINGS: Settings = { motionLevel: 'full', currency: 'JPY', expiryWarnMonths: 3, scanQuality: 'standard' };
 
 export function useSettings(): [Settings, <K extends keyof Settings>(k: K, v: Settings[K]) => Promise<void>] {
   const rows = useLiveQuery(() => db.settings.toArray(), []);

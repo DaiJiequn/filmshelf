@@ -13,6 +13,7 @@ import { Backup, Cameras, Labs, Locations, Me, SettingsPage } from './pages/Me';
 import Negatives from './pages/Negatives';
 import Playground from './pages/Playground';
 import RollDetail from './pages/RollDetail';
+import Scans from './pages/Scans';
 import Stock from './pages/Stock';
 import StockDetail from './pages/StockDetail';
 
@@ -30,6 +31,7 @@ function Pages() {
         <Route path="/" element={<Home />} />
         <Route path="/stock" element={<Stock />} />
         <Route path="/roll/:id" element={<RollDetail />} />
+        <Route path="/roll/:id/scans" element={<Scans />} />
         <Route path="/catalog" element={<Catalog />} />
         <Route path="/catalog/:id" element={<StockDetail />} />
         <Route path="/negatives" element={<Negatives />} />

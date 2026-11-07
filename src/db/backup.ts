@@ -2,7 +2,7 @@ import { db, nowIso, type Photo } from './schema';
 import { seedIfNeeded } from './seed-stocks';
 import { setSetting } from './actions';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 interface PhotoDump {
   id: string;
@@ -16,6 +16,8 @@ export interface BackupFile {
   app: 'film-shelf';
   schemaVersion: number;
   exportedAt: string;
+  /** 是否包含扫描件。不含时，导入会保留本机已有的扫描件。 */
+  includesScans?: boolean;
   stocks: unknown[];
   rolls: unknown[];
   cameras: unknown[];
@@ -23,6 +25,7 @@ export interface BackupFile {
   labVisits: unknown[];
   locations: unknown[];
   settings: unknown[];
+  frames?: { id: string; rollId: string; photoId: string; thumbId: string }[];
   photos: PhotoDump[];
 }
 
@@ -40,17 +43,20 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-export async function exportBackup(): Promise<BackupFile> {
-  const photos = await db.photos.toArray();
-  const photoDumps: PhotoDump[] = [];
-  for (const p of photos) {
-    const buf = new Uint8Array(await p.blob.arrayBuffer());
-    photoDumps.push({ id: p.id, width: p.width, height: p.height, type: p.blob.type, data: bytesToBase64(buf) });
-  }
-  return {
+async function dumpPhoto(p: Photo): Promise<PhotoDump> {
+  const buf = new Uint8Array(await p.blob.arrayBuffer());
+  return { id: p.id, width: p.width, height: p.height, type: p.blob.type, data: bytesToBase64(buf) };
+}
+
+/** 逐张拼接成 Blob，避免一次性生成超大字符串。withScans=false 时不含扫描件（备份小很多）。 */
+export async function exportBackupBlob(withScans: boolean): Promise<Blob> {
+  const frames = await db.frames.toArray();
+  const scanPhotoIds = new Set(frames.flatMap((f) => [f.photoId, f.thumbId]));
+  const head = {
     app: 'film-shelf',
     schemaVersion: SCHEMA_VERSION,
     exportedAt: nowIso(),
+    includesScans: withScans,
     stocks: await db.stocks.toArray(),
     rolls: await db.rolls.toArray(),
     cameras: await db.cameras.toArray(),
@@ -58,8 +64,37 @@ export async function exportBackup(): Promise<BackupFile> {
     labVisits: await db.labVisits.toArray(),
     locations: await db.locations.toArray(),
     settings: (await db.settings.toArray()).filter((s) => s.key !== 'lastBackupAt'),
-    photos: photoDumps,
+    frames: withScans ? frames : [],
   };
+  const parts: string[] = [JSON.stringify(head).slice(0, -1) + ',"photos":['];
+  let first = true;
+  for (const id of await db.photos.toCollection().primaryKeys()) {
+    if (!withScans && scanPhotoIds.has(id)) continue;
+    const p = await db.photos.get(id);
+    if (!p) continue;
+    parts.push((first ? '' : ',') + JSON.stringify(await dumpPhoto(p)));
+    first = false;
+  }
+  parts.push(']}');
+  return new Blob(parts, { type: 'application/json' });
+}
+
+export async function exportBackup(): Promise<BackupFile> {
+  return JSON.parse(await (await exportBackupBlob(true)).text()) as BackupFile;
+}
+
+/** 估算备份大小（字节，base64 后约 4/3） */
+export async function estimateBackupSize(): Promise<{ withScans: number; withoutScans: number }> {
+  const frames = await db.frames.toArray();
+  const scanIds = new Set(frames.flatMap((f) => [f.photoId, f.thumbId]));
+  let scans = 0;
+  let other = 0;
+  await db.photos.each((p) => {
+    if (scanIds.has(p.id)) scans += p.blob.size;
+    else other += p.blob.size;
+  });
+  const base = 200_000;
+  return { withScans: Math.round((scans + other) * 1.34) + base, withoutScans: Math.round(other * 1.34) + base };
 }
 
 export function validateBackup(x: unknown): asserts x is BackupFile {
@@ -72,20 +107,23 @@ export function validateBackup(x: unknown): asserts x is BackupFile {
   }
 }
 
-/** 导入会覆盖当前全部数据（调用方需先确认）。校验失败时不会动现有数据。 */
+const ALL = () => [db.stocks, db.rolls, db.cameras, db.labs, db.labVisits, db.locations, db.photos, db.settings, db.frames];
+
+/** 导入会覆盖当前数据（调用方需先确认）。校验失败时不会动现有数据。
+ *  备份不含扫描件时，本机已有的扫描件会保留（只保留所属胶卷仍存在的）。 */
 export async function importBackup(file: unknown): Promise<void> {
   validateBackup(file);
   const photos: Photo[] = file.photos.map((p) => ({
-    id: p.id,
-    width: p.width,
-    height: p.height,
+    id: p.id, width: p.width, height: p.height,
     blob: new Blob([base64ToBytes(p.data) as BlobPart], { type: p.type }),
   }));
-  await db.transaction('rw', [db.stocks, db.rolls, db.cameras, db.labs, db.labVisits, db.locations, db.photos, db.settings], async () => {
-    await Promise.all([
-      db.stocks.clear(), db.rolls.clear(), db.cameras.clear(), db.labs.clear(),
-      db.labVisits.clear(), db.locations.clear(), db.photos.clear(), db.settings.clear(),
-    ]);
+  const rollIds = new Set((file.rolls as { id: string }[]).map((r) => r.id));
+  await db.transaction('rw', ALL(), async () => {
+    const keep = file.includesScans === false || (file.schemaVersion < 2)
+      ? (await db.frames.toArray()).filter((f) => rollIds.has(f.rollId))
+      : [];
+    const keepPhotos = (await db.photos.bulkGet(keep.flatMap((f) => [f.photoId, f.thumbId]))).filter((p): p is Photo => !!p);
+    await Promise.all(ALL().map((t) => t.clear()));
     await db.stocks.bulkAdd(file.stocks as never[]);
     await db.rolls.bulkAdd(file.rolls as never[]);
     await db.cameras.bulkAdd(file.cameras as never[]);
@@ -94,6 +132,12 @@ export async function importBackup(file: unknown): Promise<void> {
     await db.locations.bulkAdd(file.locations as never[]);
     await db.settings.bulkAdd(file.settings as never[]);
     await db.photos.bulkAdd(photos);
+    if (keep.length) {
+      await db.photos.bulkPut(keepPhotos);
+      await db.frames.bulkAdd(keep);
+    } else if (file.frames?.length) {
+      await db.frames.bulkAdd(file.frames as never[]);
+    }
   });
   await seedIfNeeded();
 }
@@ -103,11 +147,8 @@ export async function markBackedUp(): Promise<void> {
 }
 
 export async function clearAll(): Promise<void> {
-  await db.transaction('rw', [db.stocks, db.rolls, db.cameras, db.labs, db.labVisits, db.locations, db.photos, db.settings], async () => {
-    await Promise.all([
-      db.stocks.clear(), db.rolls.clear(), db.cameras.clear(), db.labs.clear(),
-      db.labVisits.clear(), db.locations.clear(), db.photos.clear(), db.settings.clear(),
-    ]);
+  await db.transaction('rw', ALL(), async () => {
+    await Promise.all(ALL().map((t) => t.clear()));
   });
   await seedIfNeeded();
 }

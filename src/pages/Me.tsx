@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useConfirm } from '../components/Confirm';
 import { PageHeader } from '../components/PageHeader';
 import { useSheets } from '../components/SheetHost';
 import { useToast } from '../components/Toast';
 import { Empty, Segmented, Stepper } from '../components/ui';
-import { clearAll, exportBackup, importBackup, markBackedUp } from '../db/backup';
+import { clearAll, estimateBackupSize, exportBackupBlob, importBackup, markBackedUp } from '../db/backup';
+import { SCAN_QUALITY_LABEL } from '../lib/image';
 import { db, uid } from '../db/schema';
 import { FORMAT_LABEL, fmtDate, usePhotoUrl, useSettings } from '../lib/hooks';
 
@@ -207,15 +208,23 @@ export function Backup() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
+  const [withScans, setWithScans] = useState(true);
+  const [sizes, setSizes] = useState<{ withScans: number; withoutScans: number }>();
+  const [quota, setQuota] = useState<{ usage: number; quota: number }>();
+  useEffect(() => {
+    estimateBackupSize().then(setSizes);
+    navigator.storage?.estimate?.().then((e) => e.quota && setQuota({ usage: e.usage ?? 0, quota: e.quota }));
+  }, []);
+  const mb = (n: number) => (n >= 1e9 ? (n / 1e9).toFixed(1) + ' GB' : Math.max(0.1, n / 1e6).toFixed(1) + ' MB');
+
   async function doExport() {
     setBusy(true);
     try {
-      const data = await exportBackup();
-      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const blob = await exportBackupBlob(withScans);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `film-shelf-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `film-shelf-${new Date().toISOString().slice(0, 10)}${withScans ? '' : '-no-scans'}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -250,6 +259,16 @@ export function Backup() {
         <p>数据只保存在这台设备的浏览器里。清理浏览器数据或卸载桌面图标可能导致丢失，请定期导出备份。</p>
         <p className="muted small">上次备份：{settings.lastBackupAt ? fmtDate(settings.lastBackupAt) : '从未'}</p>
       </div>
+      {sizes && sizes.withScans > sizes.withoutScans + 1000 && (
+        <div className="card note-card">
+          <div className="seg" role="radiogroup" aria-label="备份内容">
+            <button className={`seg-item ${withScans ? 'on' : ''}`} role="radio" aria-checked={withScans} onClick={() => setWithScans(true)}>含扫描件 · {mb(sizes.withScans)}</button>
+            <button className={`seg-item ${!withScans ? 'on' : ''}`} role="radio" aria-checked={!withScans} onClick={() => setWithScans(false)}>不含扫描件 · {mb(sizes.withoutScans)}</button>
+          </div>
+          <p className="muted small">扫描件很占空间。不含扫描件的备份导入时，本机已有的扫描件会保留，不会丢。</p>
+        </div>
+      )}
+      {quota && <p className="muted small">本机已用 {mb(quota.usage)}，浏览器给这个应用的上限约 {mb(quota.quota)}。</p>}
       <div className="stack">
         <button className="btn primary block" disabled={busy} onClick={doExport}>导出备份（JSON）</button>
         <button className="btn ghost block" disabled={busy} onClick={() => fileRef.current?.click()}>从备份恢复…</button>
@@ -277,6 +296,13 @@ export function SettingsPage() {
         />
         <p className="muted small">简化：只保留淡入淡出；关闭：没有任何动画。系统开启「减少动态效果」时自动使用简化。</p>
         <Link to="/me/lab" className="link">打开动效实验室 →</Link>
+      </section>
+      <section className="section">
+        <h2>扫描件画质</h2>
+        <select className="input" value={s.scanQuality} onChange={(e) => set('scanQuality', e.target.value as typeof s.scanQuality)}>
+          {(Object.keys(SCAN_QUALITY_LABEL) as (keyof typeof SCAN_QUALITY_LABEL)[]).map((k) => <option key={k} value={k}>{SCAN_QUALITY_LABEL[k]}</option>)}
+        </select>
+        <p className="muted small">只影响之后导入的扫描件。缩略图始终是小图。</p>
       </section>
       <section className="section">
         <h2>货币</h2>

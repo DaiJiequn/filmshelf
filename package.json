@@ -1,6 +1,6 @@
 {
   "name": "film-shelf",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "胶卷柜 个人胶卷管理",
   "main": "electron/main.cjs",
   "scripts": {

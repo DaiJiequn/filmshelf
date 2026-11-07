@@ -1,4 +1,5 @@
-import { db, nowIso, uid, type FilmFormat, type LabVisit, type Roll } from './schema';
+import { db, nowIso, uid, type FilmFormat, type Frame, type LabVisit, type Roll } from './schema';
+import { importScan, type ScanQuality } from '../lib/image';
 import { transition } from '../domain/roll-state';
 
 export type Undo = () => Promise<void>;
@@ -153,7 +154,14 @@ export async function deleteRoll(id: string): Promise<void> {
       else await db.labVisits.delete(v.id);
     }
   }
+  await deleteFramesOf(id);
   await db.rolls.delete(id);
+}
+
+async function deleteFramesOf(rollId: string): Promise<void> {
+  const frames = await db.frames.where('rollId').equals(rollId).toArray();
+  await db.photos.bulkDelete(frames.flatMap((f) => [f.photoId, f.thumbId]));
+  await db.frames.bulkDelete(frames.map((f) => f.id));
 }
 
 /** 品种下有卷时不能删除 */
@@ -241,4 +249,43 @@ export async function addPastRolls(
       if (visitId) await db.labVisits.delete(visitId);
     },
   };
+}
+
+
+/** 导入扫描件：按文件名自然排序，依次压缩入库。单张失败不影响其他张。 */
+export async function addFrames(
+  rollId: string,
+  files: File[],
+  quality: ScanQuality,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ added: number; failed: string[] }> {
+  const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const last = await db.frames.where('rollId').equals(rollId).sortBy('order');
+  let order = last.length ? last[last.length - 1].order + 1 : 0;
+  const failed: string[] = [];
+  let added = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    onProgress?.(i, sorted.length);
+    try {
+      const img = await importScan(sorted[i], quality);
+      const frame: Frame = { id: uid(), rollId, order: order++, ...img, createdAt: nowIso() };
+      await db.frames.add(frame);
+      added++;
+    } catch {
+      failed.push(sorted[i].name);
+    }
+  }
+  onProgress?.(sorted.length, sorted.length);
+  return { added, failed };
+}
+
+export async function updateFrame(id: string, patch: Partial<Frame>): Promise<void> {
+  await db.frames.update(id, patch);
+}
+
+export async function deleteFrame(id: string): Promise<void> {
+  const f = await db.frames.get(id);
+  if (!f) return;
+  await db.photos.bulkDelete([f.photoId, f.thumbId]);
+  await db.frames.delete(id);
 }
