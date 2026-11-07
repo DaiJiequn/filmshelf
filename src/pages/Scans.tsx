@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { Develop } from '../components/Develop';
+import { IndexExport } from '../components/IndexExport';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Chips, Empty } from '../components/ui';
@@ -25,6 +26,7 @@ export default function Scans() {
   const [settings] = useSettings();
   const fileRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<View>('grid');
+  const [exporting, setExporting] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -50,14 +52,6 @@ export default function Scans() {
   if (!data) return <div className="page" />;
   const { roll, stock, frames } = data;
   if (!roll) return <div className="page"><PageHeader title="找不到这卷" back /><Empty title="这卷胶卷不存在" /></div>;
-
-  const exportIndex = async () => {
-    try {
-      await downloadIndexSheet(frames, `${stock?.brand ?? ''} ${stock?.name ?? ''}`.trim());
-    } catch (e) {
-      toast.show((e as Error).message, { tone: 'error' });
-    }
-  };
 
   return (
     <div className="page">
@@ -86,7 +80,7 @@ export default function Scans() {
         <>
           <div className="row-btns spread">
             <Chips<View> value={view} onChange={setView} options={[{ value: 'grid', label: '网格' }, { value: 'index', label: '底片条' }]} />
-            {view === 'index' && <button className="btn small ghost" onClick={exportIndex}>导出索引图</button>}
+            <button className="btn small ghost" onClick={() => setExporting(true)}>导出索引图</button>
           </div>
           {view === 'grid' ? (
             <div className="scan-grid">
@@ -115,6 +109,7 @@ export default function Scans() {
       )}
 
       <Viewer frames={frames} index={open} setIndex={setOpen} />
+      {exporting && <IndexExport rollId={roll.id} frames={frames} onClose={() => setExporting(false)} />}
     </div>
   );
 }
@@ -458,45 +453,3 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
 }
 
 /** 把缩略图拼成一张「底片条索引图」PNG 并下载 */
-async function downloadIndexSheet(frames: Frame[], title: string): Promise<void> {
-  const cols = 6, cell = 220, pad = 18, perf = 16, gap = 8, head = 70;
-  const rows = Math.ceil(frames.length / cols);
-  const stripH = cell * 2 / 3 + perf * 2 + 8;
-  const W = pad * 2 + cols * cell + (cols - 1) * gap;
-  const H = head + rows * (stripH + 14) + pad;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#14110f'; g.fillRect(0, 0, W, H);
-  g.fillStyle = '#f3eadc'; g.font = '600 28px system-ui, sans-serif'; g.fillText(title || '胶卷索引', pad, 44);
-  g.fillStyle = '#a39685'; g.font = '16px ui-monospace, monospace'; g.fillText(`${frames.length} frames`, W - pad - 110, 44);
-  for (let r = 0; r < rows; r++) {
-    const y = head + r * (stripH + 14);
-    g.fillStyle = '#080706'; g.fillRect(pad - 6, y, W - pad * 2 + 12, stripH);
-    g.fillStyle = '#3a322c';
-    for (let x = pad; x < W - pad; x += 22) {
-      g.fillRect(x, y + 4, 10, 8); g.fillRect(x, y + stripH - 12, 10, 8);
-    }
-    for (let k = 0; k < cols; k++) {
-      const f = frames[r * cols + k];
-      if (!f) break;
-      const x = pad + k * (cell + gap);
-      const p = await db.photos.get(f.thumbId);
-      if (p) {
-        const bmp = await createImageBitmap(p.blob);
-        const w = cell, h = cell * 2 / 3;
-        const s = Math.max(w / bmp.width, h / bmp.height);
-        g.save(); g.beginPath(); g.rect(x, y + perf + 4, w, h); g.clip();
-        g.drawImage(bmp, x + (w - bmp.width * s) / 2, y + perf + 4 + (h - bmp.height * s) / 2, bmp.width * s, bmp.height * s);
-        g.restore(); bmp.close?.();
-      }
-      g.fillStyle = '#f0a93a'; g.font = '12px ui-monospace, monospace'; g.fillText(String(f.order + 1), x + 4, y + stripH - 14);
-    }
-  }
-  const blob: Blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('生成索引图失败'))), 'image/png'));
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `index-${(title || 'film').replace(/\s+/g, '-')}.png`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 3000);
-}
