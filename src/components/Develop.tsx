@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { db, type Frame } from '../db/schema';
 import type { Crop } from '../lib/crop';
 import { analyzeRoll, autoAnalyze, autoFrame, autoFrameFor, computeLevels, DEFAULT_GLOSS, defaultMode, DEV_MODE_LABEL, developFrame, developInPlace, fitAspect, IDENTITY, rasterize, revertFrame, sampleLinear, type DevMode, type DevParams } from '../lib/develop';
+import { scaled, SPRING, useMotionLevel } from '../motion/tokens';
 import { useToast } from './Toast';
 
 type SKey = 'exposure' | 'grade' | 'paperBlack' | 'gloss' | 'white' | 'black' | 'saturation';
@@ -19,6 +21,7 @@ const CH = ['R', 'G', 'B'];
 
 /** 底片处理：把扫描出来的负片反相成正片、去橙色片基、调曝光色彩。预览用小图实时算，保存时用原图全尺寸算。 */
 export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void }) {
+  const level = useMotionLevel();
   const toast = useToast();
   const [p, setP] = useState<DevParams | null>(null);
   const [compare, setCompare] = useState(false);
@@ -218,7 +221,13 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
   };
 
   return createPortal(
-    <div className="dev" role="dialog" aria-modal="true" aria-label="底片处理">
+    <motion.div
+      className="dev" role="dialog" aria-modal="true" aria-label="底片处理"
+      initial={level === 'full' ? { opacity: 0, y: 40 } : { opacity: 0 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={level === 'full' ? { opacity: 0, y: 40 } : { opacity: 0 }}
+      transition={level === 'full' ? SPRING.sheet : { duration: scaled(level, 0.2) }}
+    >
       <div className="dev-top">
         <button className="btn small ghost" onClick={onClose} disabled={!!busy}>取消</button>
         <b>底片处理</b>
@@ -333,7 +342,7 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
           <p className="muted dev-hint">流程：线性光 → 密度（片基自动取自边框，也可点选）→ 逐通道黑白点 → 印相（曝光、纸号、黑位、高光压缩）。整卷统一会取全卷片基和黑白点的中位数。处理结果替换查看图，原图一直保留。</p>
         </div>
       )}
-    </div>,
+    </motion.div>,
     document.body,
   );
 }

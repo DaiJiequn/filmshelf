@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import type { Frame } from '../db/schema';
 import { dustFrame, type DustPolarity } from '../lib/dust';
+import { FilmProgress } from './FilmProgress';
+import { Overlay } from './Overlay';
 import { useToast } from './Toast';
 import { Chips } from './ui';
 
@@ -37,9 +38,9 @@ export function DustDialog({ frame, onClose }: { frame: Frame; onClose: () => vo
   };
   const cancel = () => { job.current?.cancel(); setBusy(false); };
 
-  return createPortal(
-    <div className="ixp-back" onClick={() => !busy && onClose()}>
-      <div className="ixp" role="dialog" aria-modal="true" aria-label="自动除尘" onClick={(e) => e.stopPropagation()}>
+  return (
+    <Overlay label="自动除尘" onBackdrop={() => !busy && onClose()}>
+      <>
         <div className="ixp-head"><b>自动除尘</b><button className="icon-btn" onClick={onClose} aria-label="关闭" disabled={busy}>✕</button></div>
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>
           自动识别并修补灰尘、划痕和毛发，结果替换当前查看图，原图保留，随时可在「底片处理」里还原。大图需要十几秒到几分钟，请保持页面打开。
@@ -50,17 +51,14 @@ export function DustDialog({ frame, onClose }: { frame: Frame; onClose: () => vo
         </div>
         {busy && (
           <div>
-            <div style={{ height: 6, borderRadius: 3, background: 'var(--line, #8883)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.round(frac * 100)}%`, background: 'var(--accent, #c8553d)', transition: 'width .3s' }} />
-            </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{text} · {Math.round(frac * 100)}%</div>
+            <FilmProgress value={frac} />
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{text} · {Math.round(frac * 100)}%</div>
           </div>
         )}
         {busy
           ? <button className="btn block" onClick={cancel}>取消</button>
           : <button className="btn primary block" onClick={run}>开始除尘</button>}
-      </div>
-    </div>,
-    document.body,
+      </>
+    </Overlay>
   );
 }

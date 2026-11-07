@@ -12,11 +12,13 @@ import { Chips, Empty } from '../components/ui';
 import { addFrames, deleteFrame, updateFrame } from '../db/actions';
 import { db, type Frame } from '../db/schema';
 import { usePhotoUrl, useSettings } from '../lib/hooks';
-import { SPRING, useMotionLevel } from '../motion/tokens';
+import { EASE_OUT, scaled, SPRING, useMotionLevel } from '../motion/tokens';
 
 export function Thumb({ photoId, alt = '' }: { photoId?: string; alt?: string }) {
   const url = usePhotoUrl(photoId);
-  return url ? <img src={url} alt={alt} loading="lazy" draggable={false} /> : <span className="thumb-ph" />;
+  const [ok, setOk] = useState(false);
+  useEffect(() => { setOk(false); }, [url]);
+  return url ? <img src={url} alt={alt} loading="lazy" draggable={false} className={`thumb-img ${ok ? 'ok' : ''}`} onLoad={() => setOk(true)} /> : <span className="thumb-ph" />;
 }
 
 type View = 'grid' | 'index';
@@ -25,6 +27,7 @@ export default function Scans() {
   const { id = '' } = useParams();
   const toast = useToast();
   const [settings] = useSettings();
+  const level = useMotionLevel();
   const fileRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<View>('grid');
   const [exporting, setExporting] = useState(false);
@@ -86,10 +89,16 @@ export default function Scans() {
           {view === 'grid' ? (
             <div className="scan-grid">
               {frames.map((f, i) => (
-                <button key={f.id} className="scan-cell" onClick={() => setOpen(i)} aria-label={`第 ${f.order + 1} 张`}>
+                <motion.button
+                  key={f.id} className="scan-cell" onClick={() => setOpen(i)} aria-label={`第 ${f.order + 1} 张`}
+                  initial={level === 'full' ? { opacity: 0, scale: 0.92, y: 8 } : false}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ ...SPRING.soft, delay: level === 'full' ? Math.min(i, 24) * 0.025 : 0 }}
+                  whileTap={level === 'full' ? { scale: 0.96 } : undefined}
+                >
                   <Thumb photoId={f.thumbId} />
                   <span className="scan-no mono">{f.order + 1}</span>
-                </button>
+                </motion.button>
               ))}
             </div>
           ) : (
@@ -110,7 +119,7 @@ export default function Scans() {
       )}
 
       <Viewer frames={frames} index={open} setIndex={setOpen} />
-      {exporting && <IndexExport rollId={roll.id} frames={frames} onClose={() => setExporting(false)} />}
+      <AnimatePresence>{exporting && <IndexExport rollId={roll.id} frames={frames} onClose={() => setExporting(false)} />}</AnimatePresence>
     </div>
   );
 }
@@ -349,6 +358,9 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
   const origUrl = usePhotoUrl(frame?.origPhotoId);
   const toast = useToast();
   const stripRef = useRef<HTMLDivElement>(null);
+  const prevIdx = useRef<number | null>(null);
+  const dir = index !== null && prevIdx.current !== null ? Math.sign(index - prevIdx.current) : 0;
+  useEffect(() => { prevIdx.current = index; }, [index]);
 
   const go = useCallback((d: number) => {
     if (index === null) return;
@@ -388,6 +400,13 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
             <span className="viewer-zoom mono">{scale > 1.01 ? `${Math.round(scale * 100)}%` : ''}</span>
           </div>
           <div className="viewer-stage">
+            <motion.div
+              key={frame.id}
+              className="stage-slide"
+              initial={level === 'full' && dir ? { opacity: 0, x: dir * 36 } : false}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: scaled(level, 0.26), ease: EASE_OUT }}
+            >
             <ZoomPan
               key={frame.id + frame.photoId}
               src={url}
@@ -400,6 +419,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
               onTap={() => setChrome((c) => !c)}
               onScale={setScale}
             />
+            </motion.div>
             <button className="viewer-nav left" onClick={() => go(-1)} disabled={index === 0} aria-label="上一张">‹</button>
             <button className="viewer-nav right" onClick={() => go(1)} disabled={index === frames.length - 1} aria-label="下一张">›</button>
           </div>
@@ -449,8 +469,8 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
           </div>
         </motion.div>
       )}
-      {frame && dustOpen && <DustDialog key={frame.id} frame={frame} onClose={() => setDustOpen(false)} />}
-      {frame && devOpen && <Develop key={frame.id + (frame.edit ? 'e' : 'o')} frame={frame} onClose={() => setDevOpen(false)} />}
+      <AnimatePresence>{frame && dustOpen && <DustDialog key={frame.id} frame={frame} onClose={() => setDustOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{frame && devOpen && <Develop key={frame.id + (frame.edit ? 'e' : 'o')} frame={frame} onClose={() => setDevOpen(false)} />}</AnimatePresence>
     </AnimatePresence>,
     document.body,
   );

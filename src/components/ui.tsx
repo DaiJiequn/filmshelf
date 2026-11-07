@@ -1,4 +1,6 @@
-import { useRef } from 'react';
+import { motion } from 'motion/react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { SPRING, useMotionLevel } from '../motion/tokens';
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -10,11 +12,35 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   );
 }
 
+/** 选中项底下的滑动药丸：量出选中按钮的位置，用弹簧移过去（仅「完整」动效） */
+function useSlidingPill(value: string) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const on = useMotionLevel() === 'full';
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const measure = useCallback(() => {
+    const el = wrap.current?.querySelector<HTMLElement>('[data-on="1"]');
+    if (el) setBox({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+  }, []);
+  useLayoutEffect(() => { if (on) measure(); }, [value, on, measure]);
+  useEffect(() => {
+    if (!on || !wrap.current || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap.current);
+    return () => ro.disconnect();
+  }, [on, measure]);
+  const pill = on && box
+    ? <motion.div className="pill" aria-hidden initial={false} animate={{ x: box.x, y: box.y, width: box.w, height: box.h }} transition={SPRING.snappy} />
+    : null;
+  return { wrap, pill, on };
+}
+
 export function Segmented<T extends string>({
   value, options, onChange, ariaLabel,
 }: { value: T; options: { value: T; label: string; disabled?: boolean }[]; onChange: (v: T) => void; ariaLabel?: string }) {
+  const { wrap, pill, on } = useSlidingPill(value);
   return (
-    <div className="seg" role="radiogroup" aria-label={ariaLabel}>
+    <div ref={wrap} className={`seg ${on ? 'pilled' : ''}`} role="radiogroup" aria-label={ariaLabel}>
+      {pill}
       {options.map((o) => (
         <button
           key={o.value}
@@ -23,6 +49,7 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           disabled={o.disabled}
           className={`seg-item ${value === o.value ? 'on' : ''}`}
+          data-on={value === o.value ? '1' : undefined}
           onClick={() => onChange(o.value)}
         >
           {o.label}
@@ -35,10 +62,12 @@ export function Segmented<T extends string>({
 export function Chips<T extends string>({
   value, options, onChange,
 }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  const { wrap, pill, on } = useSlidingPill(value);
   return (
-    <div className="chips" role="tablist">
+    <div ref={wrap} className={`chips ${on ? 'pilled' : ''}`} role="tablist">
+      {pill}
       {options.map((o) => (
-        <button key={o.value} className={`chip ${value === o.value ? 'on' : ''}`} onClick={() => onChange(o.value)}>
+        <button key={o.value} className={`chip ${value === o.value ? 'on' : ''}`} data-on={value === o.value ? '1' : undefined} onClick={() => onChange(o.value)}>
           {o.label}
         </button>
       ))}

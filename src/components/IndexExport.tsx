@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { db, type Frame } from '../db/schema';
 import { canvasesToPdf, canvasToPngBlob, renderSheets, saveBlob, type BandStyle, type Paper, type SheetLayout, type SheetMeta } from '../lib/contact';
 import { fmtDate, FORMAT_LABEL } from '../lib/hooks';
+import { Overlay } from './Overlay';
 import { useToast } from './Toast';
 import { Chips } from './ui';
 
@@ -70,9 +70,9 @@ export function IndexExport({ rollId, frames, onClose }: { rollId: string; frame
     }
   };
 
-  return createPortal(
-    <div className="ixp-back" onClick={() => !busy && onClose()}>
-      <div className="ixp" role="dialog" aria-modal="true" aria-label="导出索引图" onClick={(e) => e.stopPropagation()}>
+  return (
+    <Overlay label="导出索引图" onBackdrop={() => !busy && onClose()}>
+      <>
         <div className="ixp-head"><b>导出索引图</b><button className="icon-btn" onClick={onClose} aria-label="关闭" disabled={busy}>✕</button></div>
         <div className="ixp-preview">{preview ? <img src={preview} alt="索引图预览" /> : <span className="muted">生成预览…</span>}</div>
         <div className="ixp-opts">
@@ -82,8 +82,7 @@ export function IndexExport({ rollId, frames, onClose }: { rollId: string; frame
           <div><span>格式</span><Chips<'png' | 'pdf'> value={fmt} onChange={setFmt} options={[{ value: 'pdf', label: 'PDF' }, { value: 'png', label: 'PNG' }]} /></div>
         </div>
         <button className="btn primary block" onClick={exportNow} disabled={!meta || busy}>{busy ? '正在生成…' : `导出 ${fmt.toUpperCase()}`}</button>
-      </div>
-    </div>,
-    document.body,
+      </>
+    </Overlay>
   );
 }
