@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { HashRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { SheetsProvider } from './components/SheetHost';
 import { TabBar } from './components/TabBar';
@@ -7,7 +7,7 @@ import { ToastProvider } from './components/Toast';
 import { useSettings } from './lib/hooks';
 import { maybeAutoBackup } from './lib/autobackup';
 import { maybeAutoSync } from './lib/gdrive';
-import { MotionContext, type MotionLevel } from './motion/tokens';
+import { MotionContext, scaled, useMotionLevel, type MotionLevel } from './motion/tokens';
 import { RitualProvider } from './motion/signatures/Ritual';
 import Catalog from './pages/Catalog';
 import Home from './pages/Home';
@@ -24,11 +24,30 @@ function useReducedMotion(): boolean {
   return !!q?.matches;
 }
 
+const TAB_ORDER = ['/', '/stock', '/catalog', '/negatives', '/me'];
+const depthOf = (p: string) => p.split('/').filter(Boolean).length;
+const tabOf = (p: string) => TAB_ORDER.indexOf('/' + (p.split('/')[1] ?? ''));
+
+/** 页面切换的方向：同级标签按左右顺序滑；进入子页从右边推入，返回从左边回来。 */
+function pageDir(from: string, to: string): number {
+  if (from === to) return 0;
+  const a = tabOf(from), b = tabOf(to);
+  if (a !== b && a >= 0 && b >= 0 && depthOf(from) <= 1 && depthOf(to) <= 1) return Math.sign(b - a);
+  const da = depthOf(from), db = depthOf(to);
+  if (db !== da) return Math.sign(db - da);
+  return 0;
+}
+
 function Pages() {
   const loc = useLocation();
-  const key = loc.pathname.split('/').slice(0, 2).join('/');
+  const level = useMotionLevel();
+  const prev = useRef(loc.pathname);
+  const dir = pageDir(prev.current, loc.pathname);
+  useEffect(() => { prev.current = loc.pathname; }, [loc.pathname]);
+  const key = loc.pathname;
+  const x = level === 'full' ? dir * 28 : 0;
   return (
-    <motion.main key={key} className="app-main" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }}>
+    <motion.main key={key} className="app-main" initial={{ opacity: 0, y: dir ? 0 : 6, x }} animate={{ opacity: 1, y: 0, x: 0 }} transition={{ duration: scaled(level, 0.28), ease: [0.2, 0, 0, 1] }}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/stock" element={<Stock />} />

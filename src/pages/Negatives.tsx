@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
+import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { Canister } from '../components/Canister';
 import { PageHeader } from '../components/PageHeader';
@@ -7,6 +8,7 @@ import { Chips, Empty } from '../components/ui';
 import { db } from '../db/schema';
 import { fmtDate, FORMAT_LABEL } from '../lib/hooks';
 import { useGo } from '../lib/nav';
+import { SPRING, useMotionLevel } from '../motion/tokens';
 
 type Filter = 'all' | 'unscanned' | 'noplace' | 'bad';
 
@@ -14,12 +16,14 @@ type Filter = 'all' | 'unscanned' | 'noplace' | 'bad';
 export default function Negatives() {
   const sheets = useSheets();
   const go = useGo();
+  const level = useMotionLevel();
   const [filter, setFilter] = useState<Filter>('all');
   const data = useLiveQuery(async () => ({
     rolls: await db.rolls.filter((r) => r.status === 'back' || r.status === 'archived').toArray(),
     stocks: await db.stocks.toArray(),
   }), []);
 
+  let order = 0;
   const groups = useMemo(() => {
     if (!data) return [];
     const list = data.rolls.filter((r) => {
@@ -62,7 +66,13 @@ export default function Negatives() {
                 const s = data.stocks.find((x) => x.id === r.stockId);
                 const sc = r.neg?.scanned ?? 'none';
                 return (
-                  <button key={r.id} className="card row-card" onClick={() => go(`/roll/${r.id}`)}>
+                  <motion.button
+                    key={r.id} className="card row-card" onClick={() => go(`/roll/${r.id}`)}
+                    layout={level === 'full' ? 'position' : false}
+                    initial={level === 'full' ? { opacity: 0, y: 12 } : false}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ ...SPRING.soft, delay: level === 'full' ? Math.min(order++, 14) * 0.035 : 0 }}
+                  >
                     <Canister stock={s} size={28} />
                     <div className="grow">
                       <div className="roll-title">{s ? `${s.brand} ${s.name}` : '未知品种'}</div>
@@ -74,7 +84,7 @@ export default function Negatives() {
                     </div>
                     <span className={`badge ${sc === 'none' ? '' : 'keep'}`}>{SCAN_LABEL[sc]}</span>
                     {r.neg?.condition && r.neg.condition !== 'good' && <span className="badge txt-warn">{COND_LABEL[r.neg.condition]}</span>}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>

@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom';
 import { Develop } from '../components/Develop';
 import { IndexExport } from '../components/IndexExport';
 import { DustDialog } from '../components/DustDialog';
+import { FilmProgress } from '../components/FilmProgress';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Chips, Empty } from '../components/ui';
@@ -41,6 +42,19 @@ export default function Scans() {
     return { roll, stock, frames };
   }, [id]);
 
+  // 新导入的扫描件：缩略图像显影一样从暗、黑白渐渐显出色彩
+  const seen = useRef<Set<string> | null>(null);
+  const fresh = useRef<Set<string>>(new Set());
+  if (data) {
+    if (seen.current === null) seen.current = new Set(data.frames.map((f) => f.id));
+    else for (const f of data.frames) if (!seen.current.has(f.id)) { seen.current.add(f.id); fresh.current.add(f.id); }
+  }
+  useEffect(() => {
+    if (!fresh.current.size) return;
+    const t = setTimeout(() => fresh.current.clear(), 2600);
+    return () => clearTimeout(t);
+  });
+
   const onFiles = useCallback(async (files: FileList | null) => {
     if (!files?.length) return;
     setProgress({ done: 0, total: files.length });
@@ -70,7 +84,7 @@ export default function Scans() {
       {progress && (
         <div className="card progress-import" role="status">
           <span>正在导入 {Math.min(progress.done + 1, progress.total)} / {progress.total}…</span>
-          <div className="progress-track"><div className="progress-fill" style={{ width: `${(progress.done / progress.total) * 100}%` }} /></div>
+          <FilmProgress value={progress.done / progress.total} />
         </div>
       )}
 
@@ -90,7 +104,7 @@ export default function Scans() {
             <div className="scan-grid">
               {frames.map((f, i) => (
                 <motion.button
-                  key={f.id} className="scan-cell" onClick={() => setOpen(i)} aria-label={`第 ${f.order + 1} 张`}
+                  key={f.id} className={`scan-cell ${fresh.current.has(f.id) ? 'developing' : ''}`} onClick={() => setOpen(i)} aria-label={`第 ${f.order + 1} 张`}
                   initial={level === 'full' ? { opacity: 0, scale: 0.92, y: 8 } : false}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ ...SPRING.soft, delay: level === 'full' ? Math.min(i, 24) * 0.025 : 0 }}
@@ -358,6 +372,20 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
   const origUrl = usePhotoUrl(frame?.origPhotoId);
   const toast = useToast();
   const stripRef = useRef<HTMLDivElement>(null);
+  // 除尘完成后：原图从左到右被“扫过”，露出除尘后的画面
+  const dustAt = frame?.dust?.at;
+  const prevDust = useRef<{ id?: string; at?: string }>({});
+  const [sweep, setSweep] = useState(false);
+  useEffect(() => {
+    const p = prevDust.current;
+    const fire = !!frame && p.id === frame.id && !!dustAt && dustAt !== p.at && !frame.edit && level === 'full';
+    prevDust.current = { id: frame?.id, at: dustAt };
+    if (!fire) return;
+    setSweep(true);
+    const t = setTimeout(() => setSweep(false), 1500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame?.id, dustAt]);
   const prevIdx = useRef<number | null>(null);
   const dir = index !== null && prevIdx.current !== null ? Math.sign(index - prevIdx.current) : 0;
   useEffect(() => { prevIdx.current = index; }, [index]);
@@ -420,6 +448,12 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
               onScale={setScale}
             />
             </motion.div>
+            {sweep && origUrl && (
+              <div className="sweep" aria-hidden>
+                <motion.img className="sweep-img" src={origUrl} alt="" draggable={false} initial={{ clipPath: 'inset(0 0 0 0%)' }} animate={{ clipPath: 'inset(0 0 0 100%)' }} transition={{ duration: 1.15, ease: [0.4, 0, 0.2, 1] }} />
+                <motion.div className="sweep-line" initial={{ left: '0%', opacity: 1 }} animate={{ left: '100%', opacity: [1, 1, 0] }} transition={{ duration: 1.15, ease: [0.4, 0, 0.2, 1] }} />
+              </div>
+            )}
             <button className="viewer-nav left" onClick={() => go(-1)} disabled={index === 0} aria-label="上一张">‹</button>
             <button className="viewer-nav right" onClick={() => go(1)} disabled={index === frames.length - 1} aria-label="下一张">›</button>
           </div>

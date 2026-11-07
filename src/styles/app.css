@@ -460,3 +460,15 @@ button.menu-row { background: none; }
 }
 .btn:disabled { transition: opacity var(--d-std); }
 .btn.primary:not(:disabled):focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* 状态盖章（RollDetail）、显影、除尘扫过 */
+.stamp.ok { margin-left: 0; translate: -50% 0; color: var(--accent); border-color: var(--accent); z-index: 3; white-space: nowrap; }
+.scan-cell.developing img { animation: develop 1.6s var(--ease-out, ease-out) both; }
+@keyframes develop {
+  0% { filter: brightness(.15) grayscale(1) contrast(1.6); }
+  45% { filter: brightness(.7) grayscale(1) contrast(1.25); }
+  100% { filter: none; }
+}
+.sweep { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.sweep-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.sweep-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); box-shadow: 0 0 14px 2px var(--accent); }

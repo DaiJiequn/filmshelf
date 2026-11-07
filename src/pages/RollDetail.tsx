@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Canister } from '../components/Canister';
 import { useConfirm } from '../components/Confirm';
@@ -44,6 +44,20 @@ export default function RollDetail() {
 
   const [note, setNote] = useState('');
   useEffect(() => { setNote(data?.roll?.note ?? ''); }, [data?.roll?.id, data?.roll?.note]);
+
+  // 状态变化时盖一个章（只在停留在本页时状态发生变化才盖，刚进入页面不盖）
+  const status = data?.roll?.status;
+  const prevStatus = useRef<string | undefined>(undefined);
+  const [flash, setFlash] = useState('');
+  useEffect(() => {
+    if (prevStatus.current && status && prevStatus.current !== status) {
+      setFlash(STATUS_LABEL[status]);
+      const t = setTimeout(() => setFlash(''), 1700);
+      prevStatus.current = status;
+      return () => clearTimeout(t);
+    }
+    prevStatus.current = status;
+  }, [status]);
 
   if (!data) return <div className="page" />;
   const { roll, stock, camera, visit, lab, location, frames } = data;
@@ -97,8 +111,21 @@ export default function RollDetail() {
             EXPIRED
           </motion.div>
         )}
+        <AnimatePresence>
+          {flash && (
+            <motion.div
+              key={flash} className="stamp ok" aria-hidden
+              initial={level === 'full' ? { scale: 2.4, opacity: 0, rotate: -22 } : { opacity: 0 }}
+              animate={{ scale: 1, opacity: 1, rotate: -10 }}
+              exit={{ opacity: 0, transition: { duration: 0.35 } }}
+              transition={level === 'full' ? SPRING.snappy : { duration: 0.15 }}
+            >
+              {flash}
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="hero-status">
-          <span className={`status-pill s-${roll.status}`}>{STATUS_LABEL[roll.status]}</span>
+          <motion.span key={roll.status} className={`status-pill s-${roll.status}`} initial={level === 'full' ? { scale: 0.8, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={SPRING.snappy}>{STATUS_LABEL[roll.status]}</motion.span>
           {roll.keepSealed && roll.status === 'stock' && <span className="badge keep">收藏封存</span>}
         </div>
       </div>
