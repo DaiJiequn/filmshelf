@@ -25,6 +25,7 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
   const [rev, setRev] = useState(0);
   const [pick, setPick] = useState<'base' | 'gray' | null>(null);
   const [adv, setAdv] = useState(false);
+  const [split, setSplit] = useState<number | null>(null);
   const outImg = useRef<ImageData | null>(null);
   const bmp = useRef<ImageBitmap | null>(null);
   const raw = useRef<ImageData | null>(null);
@@ -68,12 +69,20 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
     const id = requestAnimationFrame(() => {
       const out = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
       if (!compare) developInPlace(out.data, p);
+      if (split !== null && !compare) {
+        // 左半边显示未处理的原图，右半边显示处理结果
+        const sx = Math.round((split / 100) * out.width) * 4;
+        for (let y = 0; y < out.height; y++) {
+          const o = y * out.width * 4;
+          out.data.set(src.data.subarray(o, o + sx), o);
+        }
+      }
       outImg.current = out;
       c.width = out.width; c.height = out.height;
       c.getContext('2d')!.putImageData(out, 0, 0);
     });
     return () => cancelAnimationFrame(id);
-  }, [p, compare, rev]);
+  }, [p, compare, rev, split]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose(); };
@@ -149,7 +158,25 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
         <button className="btn small primary" onClick={save} disabled={!p || !!busy}>保存</button>
       </div>
       <div className="dev-stage">
-        <canvas ref={cv} className={`dev-canvas ${pick ? 'picking' : ''}`} aria-label="预览" onClick={onPick} />
+        <div className="dev-canvaswrap">
+          <canvas ref={cv} className={`dev-canvas ${pick ? 'picking' : ''}`} aria-label="预览" onClick={onPick} />
+          {split !== null && (
+            <div
+              className="cmp-handle"
+              role="slider"
+              aria-label="对比分割线"
+              aria-valuenow={Math.round(split)}
+              tabIndex={0}
+              style={{ left: `${split}%` }}
+              onPointerDown={(e) => (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)}
+              onPointerMove={(e) => {
+                if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
+                const r = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                setSplit(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)));
+              }}
+            ><span className="cmp-knob">⇆</span></div>
+          )}
+        </div>
         {pick && <div className="dev-pickhint">{pick === 'base' ? '点一下没有曝光的片基（边框）' : '点一下应该是中性灰的地方'}</div>}
         {(!p || busy) && <div className="dev-busy">{busy || '载入中…'}</div>}
       </div>
@@ -186,6 +213,7 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
             <button className="btn small ghost" onClick={() => patch({ rotate: ((p.rotate + 90) % 360) as DevParams['rotate'] })}>旋转 90°</button>
             <button className="btn small ghost" onClick={() => patch({ flip: !p.flip })}>水平翻转</button>
             <button className="btn small ghost" onClick={reset}>重置</button>
+            <button className={`btn small ghost ${split !== null ? 'on' : ''}`} aria-pressed={split !== null} onClick={() => setSplit((s) => (s === null ? 50 : null))}>左右对比</button>
             <button
               className="btn small ghost"
               onPointerDown={() => setCompare(true)}

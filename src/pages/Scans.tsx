@@ -137,8 +137,8 @@ interface ZoomView { s: number; x: number; y: number }
 const MAX_ZOOM = 8;
 
 /** 可缩放、可拖动的图片：双指捏合、双击放大、滚轮缩放；未放大时左右滑动换图、下滑关闭、单击切换界面 */
-function ZoomPan({ src, thumb, alt, onPrev, onNext, onClose, onTap, onScale }: {
-  src?: string; thumb?: string; alt: string;
+function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, onScale }: {
+  src?: string; thumb?: string; alt: string; compareSrc?: string;
   onPrev: () => void; onNext: () => void; onClose: () => void; onTap: () => void; onScale: (s: number) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -151,6 +151,7 @@ function ZoomPan({ src, thumb, alt, onPrev, onNext, onClose, onTap, onScale }: {
   const ptrs = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; view: ZoomView; mid: { x: number; y: number } } | null>(null);
   const gesture = useRef({ moved: 0, gx: 0, gy: 0, t: 0, axis: '' as '' | 'x' | 'y' });
+  const [split, setSplit] = useState(50);
   const lastTap = useRef({ t: 0, x: 0, y: 0 });
   const tapTimer = useRef<number | undefined>(undefined);
 
@@ -293,9 +294,39 @@ function ZoomPan({ src, thumb, alt, onPrev, onNext, onClose, onTap, onScale }: {
           transition: anim ? 'transform 220ms cubic-bezier(0.2, 0, 0, 1)' : 'none',
         }}
       >
-        {thumb && <img className="zimg under" src={thumb} alt="" draggable={false} />}
+        {thumb && !loaded && <img className="zimg under" src={thumb} alt="" draggable={false} />}
         {src && <img className={`zimg over ${loaded ? 'ok' : ''}`} src={src} alt={alt} draggable={false} onLoad={() => setLoaded(true)} />}
       </div>
+      {compareSrc && (
+        <>
+          {/* 原图层：和上面同一个缩放/平移，只是被分割线裁掉右边 */}
+          <div className="cmpclip" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}>
+            <div className="zoomlayer" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, transition: anim ? 'transform 220ms cubic-bezier(0.2, 0, 0, 1)' : 'none' }}>
+              <img className="zimg" src={compareSrc} alt="原图" draggable={false} />
+            </div>
+          </div>
+          <span className="cmp-tag left">原图</span><span className="cmp-tag right">处理后</span>
+          <div
+            className="cmp-handle"
+            role="slider"
+            aria-label="对比分割线"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(split)}
+            tabIndex={0}
+            style={{ left: `${split}%` }}
+            onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }}
+            onPointerMove={(e) => {
+              if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
+              e.stopPropagation();
+              const r = box.current!.getBoundingClientRect();
+              setSplit(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)));
+            }}
+            onPointerUp={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.stopPropagation(); setSplit((s) => Math.max(0, s - 3)); } if (e.key === 'ArrowRight') { e.stopPropagation(); setSplit((s) => Math.min(100, s + 3)); } }}
+          ><span className="cmp-knob">⇆</span></div>
+        </>
+      )}
     </div>
   );
 }
@@ -317,6 +348,8 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
   const [infoOpen, setInfoOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 900);
   const [scale, setScale] = useState(1);
   const [devOpen, setDevOpen] = useState(false);
+  const [cmp, setCmp] = useState(false);
+  const origUrl = usePhotoUrl(frame?.origPhotoId);
   const toast = useToast();
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -326,7 +359,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
     if (n >= 0 && n < frames.length) setIndex(n);
   }, [index, frames.length, setIndex]);
 
-  useEffect(() => { setConfirmDel(false); setScale(1); }, [index]);
+  useEffect(() => { setConfirmDel(false); setScale(1); setCmp(false); }, [index]);
   useEffect(() => { if (index === null) setChrome(true); }, [index]);
   useEffect(() => {
     stripRef.current?.querySelector<HTMLElement>('.on')?.scrollIntoView?.({ inline: 'center', block: 'nearest', behavior: level === 'full' ? 'smooth' : 'auto' });
@@ -359,9 +392,10 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
           </div>
           <div className="viewer-stage">
             <ZoomPan
-              key={frame.id}
+              key={frame.id + frame.photoId}
               src={url}
               thumb={thumbUrl}
+              compareSrc={cmp ? origUrl : undefined}
               alt={`第 ${frame.order + 1} 张`}
               onPrev={() => go(-1)}
               onNext={() => go(1)}
@@ -400,6 +434,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
               </div>
             )}
             <div className="row-btns">
+              {frame.origPhotoId && <button className={`btn small ghost ${cmp ? 'on' : ''}`} aria-pressed={cmp} onClick={() => setCmp((c) => !c)}>前后对比</button>}
               <button className="btn small ghost" onClick={() => setDevOpen(true)}>{frame.edit ? '已处理 · 再调整' : '底片处理'}</button>
               {url && <a className="btn small ghost" href={url} download={`frame-${frame.order + 1}.jpg`}>保存图片</a>}
               {confirmDel ? (
