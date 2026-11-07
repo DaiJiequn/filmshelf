@@ -67,7 +67,8 @@
       {
         "provider": "github",
         "owner": "DaiJiequn",
-        "repo": "filmshelf"
+        "repo": "filmshelf",
+        "releaseType": "release"
       }
     ]
   }

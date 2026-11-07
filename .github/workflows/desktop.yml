@@ -17,7 +17,7 @@ jobs:
         with: { node-version: 22 }
       - run: npm ci
       - run: npm run build:app
-      - run: npx electron-builder --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+      - run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
