@@ -1,9 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  addPastRolls, addRolls, archiveRoll, loadRoll, returnFromLab, sendToLab, unloadRoll,
+  addPastRolls, addRolls, archiveRoll, updateRoll, loadRoll, returnFromLab, sendToLab, unloadRoll,
 } from '../db/actions';
-import { db, uid, type FilmFormat, type FilmStock, type FilmType, type Roll } from '../db/schema';
+import { db, uid, type FilmFormat, type FilmStock, type FilmType, type NegCondition, type NegScan, type Roll } from '../db/schema';
 import { useRitual } from '../motion/signatures/Ritual';
 import { FORMAT_LABEL, useSettings } from '../lib/hooks';
 import { savePhoto, TYPE_LABEL } from '../lib/image';
@@ -19,6 +19,7 @@ interface SheetsApi {
   openLab: (rollIds?: string[]) => void;
   openArchive: (rollId: string) => void;
   openPast: (stockId?: string) => void;
+  openNeg: (rollId: string) => void;
   openStockForm: (stockId?: string, onDone?: (id: string) => void) => void;
   openCamera: (id?: string, onDone?: (id: string) => void) => void;
   quickReturn: (rollIds: string[]) => Promise<void>;
@@ -38,6 +39,7 @@ type Main =
   | { kind: 'lab'; rollIds: string[] }
   | { kind: 'archive'; rollId: string }
   | { kind: 'past'; stockId?: string }
+  | { kind: 'neg'; rollId: string }
   | null;
 
 type Sub =
@@ -74,6 +76,7 @@ export function SheetsProvider({ children }: { children: React.ReactNode }) {
       openLab: (rollIds = []) => setMain({ kind: 'lab', rollIds }),
       openArchive: (rollId) => setMain({ kind: 'archive', rollId }),
       openPast: (stockId) => setMain({ kind: 'past', stockId }),
+      openNeg: (rollId) => setMain({ kind: 'neg', rollId }),
       openStockForm: (stockId, onDone) => setSub({ kind: 'stock', stockId, onDone }),
       openCamera: (cameraId, onDone) => setSub({ kind: 'camera', cameraId, onDone }),
       quickReturn,
@@ -92,6 +95,7 @@ export function SheetsProvider({ children }: { children: React.ReactNode }) {
       <UnloadSheet state={main?.kind === 'unload' ? main : null} onClose={closeMain} />
       <LabSheet state={main?.kind === 'lab' ? main : null} onClose={closeMain} />
       <PastSheet state={main?.kind === 'past' ? main : null} onClose={closeMain} api={api} />
+      <NegSheet state={main?.kind === 'neg' ? main : null} onClose={closeMain} />
       <ArchiveSheet state={main?.kind === 'archive' ? main : null} onClose={closeMain} />
       <StockFormSheet state={sub?.kind === 'stock' ? sub : null} onClose={closeSub} />
       <CameraFormSheet state={sub?.kind === 'camera' ? sub : null} onClose={closeSub} />
@@ -841,6 +845,63 @@ function PastSheet({ state, onClose, api }: { state: { stockId?: string } | null
           </details>
         </div>
       )}
+    </BottomSheet>
+  );
+}
+
+
+/* ────────────────────────────── 底片保存 ────────────────────────────── */
+
+export const COND_LABEL: Record<NegCondition, string> = { good: '完好', dusty: '有灰尘', scratched: '有划痕', fungus: '发霉' };
+export const SCAN_LABEL: Record<NegScan, string> = { none: '未扫描', lab: '店扫', self: '自扫' };
+
+function NegSheet({ state, onClose }: { state: { rollId: string } | null; onClose: () => void }) {
+  const open = !!state;
+  const toast = useToast();
+  const roll = useLiveQuery(() => (state ? db.rolls.get(state.rollId) : undefined), [state?.rollId]);
+  const places = useLiveQuery(async () => {
+    const set = new Set<string>();
+    for (const r of await db.rolls.toArray()) if (r.neg?.place) set.add(r.neg.place);
+    return [...set];
+  }, []) ?? [];
+  const [place, setPlace] = useState('');
+  const [slot, setSlot] = useState('');
+  const [condition, setCondition] = useState<NegCondition>('good');
+  const [scanned, setScanned] = useState<NegScan>('none');
+  const [scanNote, setScanNote] = useState('');
+
+  useEffect(() => {
+    if (!open || !roll) return;
+    const n = roll.neg;
+    setPlace(n?.place ?? ''); setSlot(n?.slot ?? ''); setCondition(n?.condition ?? 'good');
+    setScanned(n?.scanned ?? 'none'); setScanNote(n?.scanNote ?? '');
+  }, [open, roll?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function submit() {
+    if (!roll) return;
+    await updateRoll(roll.id, { neg: { place: place.trim() || undefined, slot: slot.trim() || undefined, condition, scanned, scanNote: scanNote.trim() || undefined } });
+    toast.show('底片保存信息已更新');
+    onClose();
+  }
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="底片保存" footer={<button className="btn primary block" onClick={submit}>保存</button>}>
+      <div className="form">
+        <Field label="放在哪里" hint="填过的位置下次会出现在候选里">
+          <input className="input" list="neg-places" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="例如 底片册 A / 防潮箱 2 层" />
+          <datalist id="neg-places">{places.map((p) => <option key={p} value={p} />)}</datalist>
+        </Field>
+        <Field label="具体位置"><input className="input" value={slot} onChange={(e) => setSlot(e.target.value)} placeholder="例如 第 3 页" /></Field>
+        <Field label="底片状态">
+          <Segmented value={condition} onChange={setCondition} options={(Object.keys(COND_LABEL) as NegCondition[]).map((c) => ({ value: c, label: COND_LABEL[c] }))} />
+        </Field>
+        <Field label="数字化">
+          <Segmented value={scanned} onChange={setScanned} options={(Object.keys(SCAN_LABEL) as NegScan[]).map((c) => ({ value: c, label: SCAN_LABEL[c] }))} />
+        </Field>
+        {scanned !== 'none' && (
+          <Field label="扫描文件在哪"><input className="input" value={scanNote} onChange={(e) => setScanNote(e.target.value)} placeholder="例如 NAS/Photos/2024/京都" /></Field>
+        )}
+      </div>
     </BottomSheet>
   );
 }

@@ -10,6 +10,7 @@ import { RitualProvider } from './motion/signatures/Ritual';
 import Catalog from './pages/Catalog';
 import Home from './pages/Home';
 import { Backup, Cameras, Labs, Locations, Me, SettingsPage } from './pages/Me';
+import Negatives from './pages/Negatives';
 import Playground from './pages/Playground';
 import RollDetail from './pages/RollDetail';
 import Stock from './pages/Stock';
@@ -31,6 +32,7 @@ function Pages() {
         <Route path="/roll/:id" element={<RollDetail />} />
         <Route path="/catalog" element={<Catalog />} />
         <Route path="/catalog/:id" element={<StockDetail />} />
+        <Route path="/negatives" element={<Negatives />} />
         <Route path="/me" element={<Me />} />
         <Route path="/me/cameras" element={<Cameras />} />
         <Route path="/me/labs" element={<Labs />} />

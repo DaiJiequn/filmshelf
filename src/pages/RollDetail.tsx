@@ -14,6 +14,7 @@ import { PRIMARY_ACTION_LABEL, STATUS_LABEL, STATUS_ORDER } from '../domain/roll
 import { fmtDate, fmtMoney, FORMAT_LABEL, useSettings } from '../lib/hooks';
 import { SPRING, useMotionLevel } from '../motion/tokens';
 import { useToast } from '../components/Toast';
+import { COND_LABEL, SCAN_LABEL } from '../components/SheetHost';
 
 export default function RollDetail() {
   const { id = '' } = useParams();
@@ -134,6 +135,22 @@ export default function RollDetail() {
         {lab && <Row k="冲洗店" v={`${lab.name}${visit?.cost !== undefined ? ` · ${fmtMoney(visit.cost, settings.currency)}` : ''}`} />}
         {visit?.requests && <Row k="冲扫要求" v={visit.requests} />}
       </section>
+
+      {(roll.status === 'back' || roll.status === 'archived') && (
+        <section className="section">
+          <h2>底片保存</h2>
+          {roll.neg && (roll.neg.place || roll.neg.scanned) ? (
+            <div className="kv">
+              <Row k="位置" v={[roll.neg.place, roll.neg.slot].filter(Boolean).join(' · ') || '未记录'} />
+              <Row k="状态" v={COND_LABEL[roll.neg.condition ?? 'good']} tone={roll.neg.condition && roll.neg.condition !== 'good' ? 'warn' : undefined} />
+              <Row k="数字化" v={`${SCAN_LABEL[roll.neg.scanned ?? 'none']}${roll.neg.scanNote ? ' · ' + roll.neg.scanNote : ''}`} />
+            </div>
+          ) : (
+            <p className="muted">还没记录这卷底片放在哪里。</p>
+          )}
+          <button className="btn ghost" onClick={() => sheets.openNeg(roll.id)}>{roll.neg ? '编辑底片保存' : '记录底片保存'}</button>
+        </section>
+      )}
 
       {roll.status === 'archived' && (
         <section className="section">

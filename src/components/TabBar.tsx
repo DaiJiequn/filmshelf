@@ -12,7 +12,7 @@ const TABS = [
 export function TabBar() {
   const { pathname } = useLocation();
   const level = useMotionLevel();
-  const active = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
+  const active = (to: string) => (to === '/' ? pathname === '/' : to === '/me' ? pathname.startsWith('/me') || pathname.startsWith('/negatives') : pathname.startsWith(to));
   return (
     <nav className="tabbar" aria-label="主导航">
       {TABS.map((t) => (

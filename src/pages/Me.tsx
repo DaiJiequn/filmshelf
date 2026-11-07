@@ -19,6 +19,7 @@ export function Me() {
     rolls: await db.rolls.count(),
   }), []);
   const rows = [
+    { to: '/negatives', label: '底片柜' },
     { to: '/me/cameras', label: '相机', n: counts?.cameras },
     { to: '/me/labs', label: '冲洗店', n: counts?.labs },
     { to: '/me/locations', label: '存放位置', n: counts?.locations },

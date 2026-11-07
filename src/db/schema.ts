@@ -23,6 +23,18 @@ export interface HistoryItem {
   at: string;
 }
 
+export type NegCondition = 'good' | 'dusty' | 'scratched' | 'fungus';
+export type NegScan = 'none' | 'lab' | 'self';
+
+/** 底片保存记录（冲洗完的卷才有） */
+export interface NegStorage {
+  place?: string; // 例如「底片册 A」「防潮箱 2 层」
+  slot?: string; // 例如「第 3 页」「第 12 格」
+  condition?: NegCondition;
+  scanned?: NegScan;
+  scanNote?: string; // 扫描文件放在哪
+}
+
 export interface Roll {
   id: string;
   stockId: string;
@@ -43,6 +55,7 @@ export interface Roll {
   labVisitId?: string;
   rating?: number;
   note?: string;
+  neg?: NegStorage;
   history: HistoryItem[];
   createdAt: string;
   updatedAt: string;
