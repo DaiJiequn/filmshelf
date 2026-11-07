@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { db, type Frame } from '../db/schema';
-import { analyzeRoll, autoAnalyze, computeLevels, DEFAULT_GLOSS, defaultMode, DEV_MODE_LABEL, developFrame, developInPlace, IDENTITY, rasterize, revertFrame, sampleLinear, type DevMode, type DevParams } from '../lib/develop';
+import type { Crop } from '../lib/crop';
+import { analyzeRoll, autoAnalyze, autoFrame, autoFrameFor, computeLevels, DEFAULT_GLOSS, defaultMode, DEV_MODE_LABEL, developFrame, developInPlace, fitAspect, IDENTITY, rasterize, revertFrame, sampleLinear, type DevMode, type DevParams } from '../lib/develop';
 import { useToast } from './Toast';
 
 type SKey = 'exposure' | 'grade' | 'paperBlack' | 'gloss' | 'white' | 'black' | 'saturation';
@@ -26,6 +27,8 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
   const [pick, setPick] = useState<'base' | 'gray' | null>(null);
   const [adv, setAdv] = useState(false);
   const [split, setSplit] = useState<number | null>(null);
+  const [cropping, setCropping] = useState(false);
+  const drag = useRef<{ kind: string; sx: number; sy: number; start: Crop } | null>(null);
   const outImg = useRef<ImageData | null>(null);
   const bmp = useRef<ImageBitmap | null>(null);
   const raw = useRef<ImageData | null>(null);
@@ -41,13 +44,13 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
       if (dead) { b.close?.(); return; }
       bmp.current = b;
       let init: DevParams;
-      if (frame.edit?.v === 2) init = frame.edit;
+      if (frame.edit?.v === 2) init = { ...IDENTITY, ...frame.edit };
       else {
         const roll = await db.rolls.get(frame.rollId);
         const stock = roll ? await db.stocks.get(roll.stockId) : undefined;
         init = { ...IDENTITY, mode: defaultMode(stock?.type) };
       }
-      raw.current = rasterize(b, init.rotate, init.flip, 1200);
+      raw.current = rasterize(b, init.rotate, init.flip, 1200, init.angle);
       if (frame.edit?.v !== 2) init = { ...init, ...autoAnalyze(raw.current, init.mode), gloss: init.mode === 'positive' ? 0 : DEFAULT_GLOSS };
       setP(init);
     })();
@@ -55,10 +58,10 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
   }, [frame.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 旋转/翻转变了就重新取像素
-  const geo = p ? `${p.rotate}${p.flip}` : '';
+  const geo = p ? `${p.rotate}${p.flip}${p.angle}` : '';
   useEffect(() => {
     if (!p || !bmp.current) return;
-    raw.current = rasterize(bmp.current, p.rotate, p.flip, 1200);
+    raw.current = rasterize(bmp.current, p.rotate, p.flip, 1200, p.angle);
     setRev((r) => r + 1);
   }, [geo]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -137,12 +140,76 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
       for (let i = 0; i < all.length; i++) {
         setBusy(`整卷处理 ${i + 1} / ${all.length}…`);
         const own = all[i].id === frame.id;
-        await developFrame(all[i], { ...p, ...(roll ?? {}), rotate: own ? p.rotate : (all[i].edit?.rotate ?? 0), flip: own ? p.flip : (all[i].edit?.flip ?? false) });
+        const rot = own ? p.rotate : (all[i].edit?.rotate ?? 0), flp = own ? p.flip : (all[i].edit?.flip ?? false);
+        let geoP: Partial<DevParams> = {};
+        if (!own) {
+          // 你裁过的话，其余每张各自检测边框（比例沿用）；没裁就都不裁
+          if (p.crop) {
+            const f = await autoFrameFor(all[i], p.mode, rot, flp);
+            const sz = all[i].width && all[i].height ? { W: all[i].width, H: all[i].height } : dims();
+            geoP = { angle: f.angle, crop: f.crop && p.aspect ? fitAspect(f.crop, p.aspect, sz.W, sz.H) : f.crop };
+          } else geoP = { angle: 0, crop: null };
+        }
+        await developFrame(all[i], { ...p, ...(roll ?? {}), ...geoP, rotate: rot, flip: flp });
       }
       toast.show(`已处理 ${all.length} 张`);
       onClose();
     } catch (e) { toast.show(e instanceof Error ? e.message : '处理失败'); setBusy(''); }
   };
+
+  const dims = () => ({ W: raw.current?.width ?? 1, H: raw.current?.height ?? 1 });
+  const FULL: Crop = { x: 0, y: 0, w: 1, h: 1 };
+
+  const autoCrop = () => {
+    if (!bmp.current || !p) return;
+    const r = autoFrame(bmp.current, p.mode, p.rotate, p.flip);
+    if (!r.crop) { toast.show('没找到明显的边框，保持整张'); patch({ angle: r.angle }); return; }
+    const { W, H } = dims();
+    patch({ angle: r.angle, crop: p.aspect ? fitAspect(r.crop, p.aspect, W, H) : r.crop });
+    toast.show(`已自动裁切${r.angle ? `，纠偏 ${r.angle}°` : ''}`);
+  };
+  const setAspect = (a: number | null) => {
+    const { W, H } = dims();
+    patch({ aspect: a, ...(a ? { crop: fitAspect(p?.crop ?? FULL, a, W, H) } : {}) });
+  };
+
+  const dragStart = (kind: string) => (e: React.PointerEvent) => {
+    if (!p) return;
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { kind, sx: e.clientX, sy: e.clientY, start: p.crop ?? FULL };
+  };
+  const dragMove = (e: React.PointerEvent) => {
+    const g = drag.current, wrap = (e.currentTarget as HTMLElement).closest('.dev-canvaswrap') as HTMLElement | null;
+    if (!g || !wrap || !p) return;
+    const r = wrap.getBoundingClientRect();
+    const dx = (e.clientX - g.sx) / r.width, dy = (e.clientY - g.sy) / r.height;
+    const { W, H } = dims();
+    const MIN = 0.05, s = g.start;
+    let x0 = s.x, y0 = s.y, x1 = s.x + s.w, y1 = s.y + s.h;
+    const cl = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
+    if (g.kind === 'move') {
+      x0 = cl(s.x + dx, 0, 1 - s.w); y0 = cl(s.y + dy, 0, 1 - s.h); x1 = x0 + s.w; y1 = y0 + s.h;
+    } else {
+      if (g.kind.includes('w')) x0 = cl(s.x + dx, 0, x1 - MIN);
+      if (g.kind.includes('e')) x1 = cl(x1 + dx, x0 + MIN, 1);
+      if (g.kind.includes('n')) y0 = cl(s.y + dy, 0, y1 - MIN);
+      if (g.kind.includes('s')) y1 = cl(y1 + dy, y0 + MIN, 1);
+      if (p.aspect && g.kind.length === 2) {
+        // 锁定比例：以对角为锚点，宽度跟随指针，高度由比例决定
+        const ratio = (p.aspect * H) / W; // 归一化 w/h
+        const ax = g.kind.includes('w') ? s.x + s.w : s.x, ay = g.kind.includes('n') ? s.y + s.h : s.y;
+        let w = Math.abs((g.kind.includes('w') ? x0 : x1) - ax);
+        const maxW = Math.min(g.kind.includes('w') ? ax : 1 - ax, (g.kind.includes('n') ? ay : 1 - ay) * ratio);
+        w = cl(w, MIN, maxW);
+        const h = w / ratio;
+        x0 = g.kind.includes('w') ? ax - w : ax; x1 = x0 + w;
+        y0 = g.kind.includes('n') ? ay - h : ay; y1 = y0 + h;
+      }
+    }
+    patch({ crop: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } });
+  };
+  const dragEnd = () => { drag.current = null; };
 
   const doRevert = async () => {
     setBusy('正在还原…');
@@ -160,6 +227,25 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
       <div className="dev-stage">
         <div className="dev-canvaswrap">
           <canvas ref={cv} className={`dev-canvas ${pick ? 'picking' : ''}`} aria-label="预览" onClick={onPick} />
+          {p?.crop && (
+            <div className="crop-dim" aria-hidden="true">
+              <div style={{ position: 'absolute', left: `${p.crop.x * 100}%`, top: `${p.crop.y * 100}%`, width: `${p.crop.w * 100}%`, height: `${p.crop.h * 100}%`, boxShadow: '0 0 0 9999px rgba(0,0,0,.55)' }} />
+            </div>
+          )}
+          {p?.crop && (
+            <div
+              className={`crop-box ${cropping ? 'editing' : ''}`}
+              style={{ left: `${p.crop.x * 100}%`, top: `${p.crop.y * 100}%`, width: `${p.crop.w * 100}%`, height: `${p.crop.h * 100}%` }}
+              onPointerDown={cropping ? dragStart('move') : undefined}
+              onPointerMove={cropping ? dragMove : undefined}
+              onPointerUp={dragEnd}
+              onPointerCancel={dragEnd}
+            >
+              {cropping && (['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const).filter((k) => !(p.aspect && k.length === 1)).map((k) => (
+                <span key={k} className={`crop-h ${k}`} onPointerDown={dragStart(k)} onPointerMove={dragMove} onPointerUp={dragEnd} onPointerCancel={dragEnd} aria-label={`裁切 ${k}`} />
+              ))}
+            </div>
+          )}
           {split !== null && (
             <div
               className="cmp-handle"
@@ -205,6 +291,24 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
                 </label>
               )))}
             </>
+          )}
+          <label className="dev-slider">
+            <span>角度</span>
+            <input type="range" min={-30} max={30} value={Math.round(p.angle * 10)} onChange={(e) => patch({ angle: Number(e.target.value) / 10 })} onDoubleClick={() => patch({ angle: 0 })} />
+            <output className="mono">{p.angle.toFixed(1)}°</output>
+          </label>
+          <div className="dev-row">
+            <button className="btn small ghost" onClick={autoCrop}>自动裁切</button>
+            <button className={`btn small ghost ${cropping ? 'on' : ''}`} aria-pressed={cropping} onClick={() => { if (!p.crop) patch({ crop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 } }); setCropping((c) => !c); }}>{cropping ? '完成裁切' : '手动裁切'}</button>
+            {p.crop && <button className="btn small ghost" onClick={() => { patch({ crop: null }); setCropping(false); }}>清除裁切</button>}
+          </div>
+          {cropping && (
+            <div className="dev-row" role="radiogroup" aria-label="裁切比例">
+              {([['自由', null], ['3:2', 3 / 2], ['1:1', 1], ['4:3', 4 / 3], ['7:6', 7 / 6], ['5:4', 5 / 4]] as [string, number | null][]).map(([label, a]) => (
+                <button key={label} role="radio" aria-checked={p.aspect === a} className={`chip ${p.aspect === a ? 'on' : ''}`} onClick={() => setAspect(a)}>{label}</button>
+              ))}
+              {p.aspect && p.aspect !== 1 && <button className="chip" onClick={() => setAspect(1 / p.aspect!)}>横 / 竖</button>}
+            </div>
           )}
           <div className="dev-row">
             <button className="btn small ghost" onClick={auto} disabled={p.mode === 'positive'}>自动校正</button>

@@ -400,3 +400,13 @@ button.menu-row { background: none; }
 .btn.ghost.on { border-color: var(--accent); color: var(--accent); }
 .viewer-info .row-btns { flex-wrap: wrap; }
 .viewer-info .row-btns .btn { white-space: nowrap; }
+
+/* 裁切框 */
+.crop-dim { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.crop-box { position: absolute; border: 1.5px solid var(--accent); pointer-events: none; touch-action: none; }
+.crop-box.editing { pointer-events: auto; cursor: move; }
+.crop-h { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; touch-action: none; }
+.crop-h::after { content: ''; position: absolute; inset: 7px; background: var(--accent); border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+.crop-h.nw { left: 0; top: 0; cursor: nwse-resize; } .crop-h.n { left: 50%; top: 0; cursor: ns-resize; } .crop-h.ne { left: 100%; top: 0; cursor: nesw-resize; }
+.crop-h.e { left: 100%; top: 50%; cursor: ew-resize; } .crop-h.se { left: 100%; top: 100%; cursor: nwse-resize; } .crop-h.s { left: 50%; top: 100%; cursor: ns-resize; }
+.crop-h.sw { left: 0; top: 100%; cursor: nesw-resize; } .crop-h.w { left: 0; top: 50%; cursor: ew-resize; }

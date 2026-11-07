@@ -1,5 +1,6 @@
 import { db, uid, type Frame } from '../db/schema';
 import { compressImage } from './image';
+import { detectAngle, detectCrop, fitAspect, type Crop } from './crop';
 
 /**
  * 底片处理（v2）——参考 darktable negadoctor 的“密度空间 + 模拟放大机印相”流程，
@@ -29,6 +30,12 @@ export interface DevParams {
   highlight: number[]; // 高光偏色 R/G/B -100..100（乘数）
   rotate: 0 | 90 | 180 | 270;
   flip: boolean;
+  /** 微调倾斜角（度，-3..3），用于纠偏 */
+  angle: number;
+  /** 裁切框（归一化，相对于旋转/纠偏后的整图）；null = 不裁 */
+  crop: Crop | null;
+  /** 裁切时锁定的宽高比（宽/高）；null = 自由 */
+  aspect: number | null;
 }
 
 export const DEV_MODE_LABEL: Record<DevMode, string> = {
@@ -40,7 +47,7 @@ export const DEV_MODE_LABEL: Record<DevMode, string> = {
 export const IDENTITY: DevParams = {
   v: 2, mode: 'positive', base: [1, 1, 1], lo: [0, 0, 0], hi: [1, 1, 1],
   exposure: 0, grade: 0, paperBlack: 0, gloss: 0, white: 0, black: 0, saturation: 0,
-  shadow: [0, 0, 0], highlight: [0, 0, 0], rotate: 0, flip: false,
+  shadow: [0, 0, 0], highlight: [0, 0, 0], rotate: 0, flip: false, angle: 0, crop: null, aspect: null,
 };
 
 export function defaultMode(stockType?: string): DevMode {
@@ -215,7 +222,7 @@ export function sampleLinear(img: ImageData, x: number, y: number, r = 3): numbe
 }
 
 /** 按旋转/翻转把图画到画布，返回像素。maxSide 限制最长边。 */
-export function rasterize(bmp: ImageBitmap, rotate: number, flip: boolean, maxSide: number): ImageData {
+export function rasterize(bmp: ImageBitmap, rotate: number, flip: boolean, maxSide: number, angle = 0): ImageData {
   const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
   const dw = Math.max(1, Math.round(bmp.width * k)), dh = Math.max(1, Math.round(bmp.height * k));
   const swap = rotate === 90 || rotate === 270;
@@ -223,7 +230,7 @@ export function rasterize(bmp: ImageBitmap, rotate: number, flip: boolean, maxSi
   c.width = swap ? dh : dw; c.height = swap ? dw : dh;
   const ctx = c.getContext('2d', { willReadFrequently: true })!;
   ctx.translate(c.width / 2, c.height / 2);
-  ctx.rotate((rotate * Math.PI) / 180);
+  ctx.rotate(((rotate + angle) * Math.PI) / 180);
   if (flip) ctx.scale(-1, 1);
   ctx.drawImage(bmp, -dw / 2, -dh / 2, dw, dh);
   return ctx.getImageData(0, 0, c.width, c.height);
@@ -245,6 +252,27 @@ export async function analyzeRoll(frames: Frame[], mode: DevMode): Promise<{ bas
   return { base: m('base'), lo: m('lo'), hi: m('hi') };
 }
 
+/** 自动找边框：先估计倾斜角，纠偏后再找画面矩形 */
+export function autoFrame(bmp: ImageBitmap, mode: DevMode, rotate: number, flip: boolean, maxSide = 1000): { angle: number; crop: Crop | null } {
+  const inv = isNeg(mode);
+  const first = rasterize(bmp, rotate, flip, maxSide, 0);
+  const angle = detectAngle(first, inv);
+  const img = Math.abs(angle) >= 0.2 ? rasterize(bmp, rotate, flip, maxSide, angle) : first;
+  // 纠偏后四角会露出空白，把检测到的边再多收一点
+  const margin = 0.004 + Math.abs(Math.sin((angle * Math.PI) / 180)) * 0.6;
+  return { angle: Math.abs(angle) >= 0.2 ? angle : 0, crop: detectCrop(img, inv, margin) };
+}
+
+/** 对某张图自动找边框（读原图） */
+export async function autoFrameFor(frame: Frame, mode: DevMode, rotate: number, flip: boolean): Promise<{ angle: number; crop: Crop | null }> {
+  const orig = await db.photos.get(frame.origPhotoId ?? frame.photoId);
+  if (!orig) return { angle: 0, crop: null };
+  const bmp = await createImageBitmap(orig.blob);
+  try { return autoFrame(bmp, mode, rotate, flip); } finally { bmp.close?.(); }
+}
+
+export { fitAspect };
+
 const MAX_OUT = 6000;
 
 /** 把处理应用到一张扫描件：保留原图（origPhotoId），生成新的查看图和缩略图。 */
@@ -253,13 +281,22 @@ export async function developFrame(frame: Frame, params: DevParams): Promise<Dev
   const orig = await db.photos.get(origId);
   if (!orig) throw new Error('找不到原图');
   const bmp = await createImageBitmap(orig.blob);
-  const img = rasterize(bmp, params.rotate, params.flip, MAX_OUT);
+  const img = rasterize(bmp, params.rotate, params.flip, MAX_OUT, params.angle ?? 0);
   bmp.close?.();
   const used = params;
   developInPlace(img.data, used);
-  const c = document.createElement('canvas');
+  let c = document.createElement('canvas');
   c.width = img.width; c.height = img.height;
   c.getContext('2d')!.putImageData(img, 0, 0);
+  const cr = params.crop;
+  if (cr) {
+    const sx = Math.round(cr.x * img.width), sy = Math.round(cr.y * img.height);
+    const sw = Math.max(1, Math.min(img.width - sx, Math.round(cr.w * img.width))), sh = Math.max(1, Math.min(img.height - sy, Math.round(cr.h * img.height)));
+    const c2 = document.createElement('canvas');
+    c2.width = sw; c2.height = sh;
+    c2.getContext('2d')!.drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
+    c = c2;
+  }
   const blob: Blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('导出失败'))), 'image/jpeg', 0.92));
   const thumb = await compressImage(blob, 480, 0.8);
   const photoId = uid(), thumbId = uid();
@@ -267,13 +304,13 @@ export async function developFrame(frame: Frame, params: DevParams): Promise<Dev
   if (!cur) throw new Error('这张已被删除');
   await db.transaction('rw', db.photos, db.frames, async () => {
     await db.photos.bulkAdd([
-      { id: photoId, blob, width: img.width, height: img.height },
+      { id: photoId, blob, width: c.width, height: c.height },
       { id: thumbId, blob: thumb.blob, width: thumb.width, height: thumb.height },
     ]);
     // 旧的处理版本和旧缩略图删掉；原图永远保留
     const stale = [cur.thumbId, ...(cur.origPhotoId ? [cur.photoId] : [])];
     await db.photos.bulkDelete(stale);
-    await db.frames.update(frame.id, { photoId, thumbId, width: img.width, height: img.height, origPhotoId: origId, edit: used });
+    await db.frames.update(frame.id, { photoId, thumbId, width: c.width, height: c.height, origPhotoId: origId, edit: used });
   });
   return used;
 }
