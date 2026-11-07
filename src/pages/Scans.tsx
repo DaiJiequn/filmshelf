@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
+import { Develop } from '../components/Develop';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Chips, Empty } from '../components/ui';
@@ -315,6 +316,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
   const [chrome, setChrome] = useState(true);
   const [infoOpen, setInfoOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 900);
   const [scale, setScale] = useState(1);
+  const [devOpen, setDevOpen] = useState(false);
   const toast = useToast();
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -330,7 +332,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
     stripRef.current?.querySelector<HTMLElement>('.on')?.scrollIntoView?.({ inline: 'center', block: 'nearest', behavior: level === 'full' ? 'smooth' : 'auto' });
   }, [index, level]);
   useEffect(() => {
-    if (index === null) return;
+    if (index === null || devOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
       if (e.key === 'Escape') setIndex(null);
@@ -342,7 +344,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [index, go, setIndex]);
+  }, [index, go, setIndex, devOpen]);
 
   const summary = frame ? [frame.shutter, frame.aperture, frame.focal, frame.place].filter(Boolean).join(' · ') : '';
 
@@ -398,6 +400,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
               </div>
             )}
             <div className="row-btns">
+              <button className="btn small ghost" onClick={() => setDevOpen(true)}>{frame.edit ? '已处理 · 再调整' : '底片处理'}</button>
               {url && <a className="btn small ghost" href={url} download={`frame-${frame.order + 1}.jpg`}>保存图片</a>}
               {confirmDel ? (
                 <button className="btn small danger" onClick={async () => {
@@ -413,6 +416,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
           </div>
         </motion.div>
       )}
+      {frame && devOpen && <Develop key={frame.id + (frame.edit ? 'e' : 'o')} frame={frame} onClose={() => setDevOpen(false)} />}
     </AnimatePresence>,
     document.body,
   );

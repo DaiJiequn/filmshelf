@@ -160,7 +160,7 @@ export async function deleteRoll(id: string): Promise<void> {
 
 async function deleteFramesOf(rollId: string): Promise<void> {
   const frames = await db.frames.where('rollId').equals(rollId).toArray();
-  await db.photos.bulkDelete(frames.flatMap((f) => [f.photoId, f.thumbId]));
+  await db.photos.bulkDelete(frames.flatMap((f) => [f.photoId, f.thumbId, ...(f.origPhotoId ? [f.origPhotoId] : [])]));
   await db.frames.bulkDelete(frames.map((f) => f.id));
 }
 
@@ -286,6 +286,6 @@ export async function updateFrame(id: string, patch: Partial<Frame>): Promise<vo
 export async function deleteFrame(id: string): Promise<void> {
   const f = await db.frames.get(id);
   if (!f) return;
-  await db.photos.bulkDelete([f.photoId, f.thumbId]);
+  await db.photos.bulkDelete([f.photoId, f.thumbId, ...(f.origPhotoId ? [f.origPhotoId] : [])]);
   await db.frames.delete(id);
 }

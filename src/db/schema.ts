@@ -75,6 +75,10 @@ export interface Frame {
   focal?: string; // 例如 50mm
   place?: string;
   note?: string;
+  /** 处理过时，导入时的原图（photoId 指向处理后的版本） */
+  origPhotoId?: string;
+  /** 上次使用的底片处理参数 */
+  edit?: import('../lib/develop').DevParams;
   createdAt: string;
 }
 

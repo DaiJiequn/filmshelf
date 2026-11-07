@@ -51,7 +51,7 @@ async function dumpPhoto(p: Photo): Promise<PhotoDump> {
 /** 逐张拼接成 Blob，避免一次性生成超大字符串。withScans=false 时不含扫描件（备份小很多）。 */
 export async function exportBackupBlob(withScans: boolean): Promise<Blob> {
   const frames = await db.frames.toArray();
-  const scanPhotoIds = new Set(frames.flatMap((f) => [f.photoId, f.thumbId]));
+  const scanPhotoIds = new Set(frames.flatMap((f) => [f.photoId, f.thumbId, ...(f.origPhotoId ? [f.origPhotoId] : [])]));
   const head = {
     app: 'film-shelf',
     schemaVersion: SCHEMA_VERSION,
@@ -86,7 +86,7 @@ export async function exportBackup(): Promise<BackupFile> {
 /** 估算备份大小（字节，base64 后约 4/3） */
 export async function estimateBackupSize(): Promise<{ withScans: number; withoutScans: number }> {
   const frames = await db.frames.toArray();
-  const scanIds = new Set(frames.flatMap((f) => [f.photoId, f.thumbId]));
+  const scanIds = new Set(frames.flatMap((f) => [f.photoId, f.thumbId, ...(f.origPhotoId ? [f.origPhotoId] : [])]));
   let scans = 0;
   let other = 0;
   await db.photos.each((p) => {
@@ -122,7 +122,7 @@ export async function importBackup(file: unknown): Promise<void> {
     const keep = file.includesScans === false || (file.schemaVersion < 2)
       ? (await db.frames.toArray()).filter((f) => rollIds.has(f.rollId))
       : [];
-    const keepPhotos = (await db.photos.bulkGet(keep.flatMap((f) => [f.photoId, f.thumbId]))).filter((p): p is Photo => !!p);
+    const keepPhotos = (await db.photos.bulkGet(keep.flatMap((f) => [f.photoId, f.thumbId, ...(f.origPhotoId ? [f.origPhotoId] : [])]))).filter((p): p is Photo => !!p);
     await Promise.all(ALL().map((t) => t.clear()));
     await db.stocks.bulkAdd(file.stocks as never[]);
     await db.rolls.bulkAdd(file.rolls as never[]);
