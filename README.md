@@ -7,7 +7,6 @@
 - `npm run dev`      开发
 - `npm test`         领域逻辑与备份往返测试
 - `npm run build`    生成 dist/（PWA，可离线、可添加到主屏幕）
-- `npm run build:single`  生成 dist-single/index.html（单文件，双击即可预览，无离线缓存）
 
 ## 上手机
 PWA 必须通过 HTTPS 访问才能安装和离线：把 dist/ 整个目录传到 GitHub Pages / Netlify / Cloudflare Pages 即可。

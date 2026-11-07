@@ -7,15 +7,10 @@ export interface DustOpts { polarity: DustPolarity; sensitivity: number }
 
 const MAX_SIDE = 6000;
 
-export function dustSupported(): boolean {
-  return !(location.protocol === 'file:' && !/Electron/i.test(navigator.userAgent));
-}
-
 /** 对当前显示的图自动除尘，结果替换查看图，原图保留（可还原）。返回清除的处数。 */
 export function dustFrame(frame: Frame, opts: DustOpts, onProgress: (frac: number, text: string) => void): { promise: Promise<number>; cancel: () => void } {
   let worker: Worker | null = null;
   const promise = (async () => {
-    if (!dustSupported()) throw new Error('单文件版不支持除尘，请使用网页版或桌面版');
     const cur = await db.frames.get(frame.id);
     if (!cur) throw new Error('这张已被删除');
     const src = await db.photos.get(cur.photoId);

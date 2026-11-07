@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Frame } from '../db/schema';
-import { dustFrame, dustSupported, type DustPolarity } from '../lib/dust';
+import { dustFrame, type DustPolarity } from '../lib/dust';
 import { useToast } from './Toast';
 import { Chips } from './ui';
 
@@ -15,7 +15,6 @@ export function DustDialog({ frame, onClose }: { frame: Frame; onClose: () => vo
   const [text, setText] = useState('');
   const job = useRef<{ cancel: () => void } | null>(null);
   const alive = useRef(true);
-  const ok = dustSupported();
 
   useEffect(() => () => { alive.current = false; job.current?.cancel(); }, []);
   useEffect(() => {
@@ -57,10 +56,9 @@ export function DustDialog({ frame, onClose }: { frame: Frame; onClose: () => vo
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{text} · {Math.round(frac * 100)}%</div>
           </div>
         )}
-        {!ok && <div className="muted" style={{ fontSize: 13 }}>单文件版不支持除尘，请使用网页版或桌面版。</div>}
         {busy
           ? <button className="btn block" onClick={cancel}>取消</button>
-          : <button className="btn primary block" onClick={run} disabled={!ok}>开始除尘</button>}
+          : <button className="btn primary block" onClick={run}>开始除尘</button>}
       </div>
     </div>,
     document.body,

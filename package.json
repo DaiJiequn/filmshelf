@@ -1,13 +1,12 @@
 {
   "name": "film-shelf",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "胶卷柜 个人胶卷管理",
   "main": "electron/main.cjs",
   "scripts": {
     "test": "vitest run",
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "build:single": "vite build -c vite.single.config.ts",
     "preview": "vite preview --host",
     "build:app": "vite build -c vite.app.config.ts",
     "pack": "npm run build:app && electron-builder"
@@ -37,7 +36,6 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.6",
     "vite-plugin-pwa": "^2.0.0",
-    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^5.1.0"
   },
   "type": "module",

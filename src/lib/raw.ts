@@ -5,9 +5,6 @@ export const RAW_EXT = /\.(3fr|fff|arw|cr2|cr3|crw|dng|nef|nrw|orf|pef|raf|rw2|r
 export const isRawFile = (f: File) => RAW_EXT.test(f.name);
 
 async function decodeWithLibRaw(file: File): Promise<Blob> {
-  if (location.protocol === 'file:' && !/Electron/i.test(navigator.userAgent)) {
-    throw new Error('单文件版不支持 RAW 解码，请使用网页版或桌面版');
-  }
   const LibRaw = (await import('libraw-wasm')).default;
   const raw = new LibRaw();
   try {
