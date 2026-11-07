@@ -102,6 +102,28 @@ export async function estimateBackupSize(): Promise<{ withScans: number; without
   return { withScans: Math.round((scans + other) * 1.34) + base, withoutScans: Math.round(other * 1.34) + base };
 }
 
+/** 云同步用：覆盖所有记录，但图片只补充 newPhotos，并删掉备份里不再引用的图片（不必把所有图片载入内存）。 */
+export async function applyBackupKeepPhotos(file: BackupFile, newPhotos: Photo[]): Promise<void> {
+  validateBackup(file);
+  const want = new Set(file.photos.map((p) => p.id));
+  const others = ALL().filter((t) => t !== db.photos);
+  await db.transaction('rw', ALL(), async () => {
+    await Promise.all(others.map((t) => t.clear()));
+    await db.stocks.bulkAdd(file.stocks as never[]);
+    await db.rolls.bulkAdd(file.rolls as never[]);
+    await db.cameras.bulkAdd(file.cameras as never[]);
+    await db.labs.bulkAdd(file.labs as never[]);
+    await db.labVisits.bulkAdd(file.labVisits as never[]);
+    await db.locations.bulkAdd(file.locations as never[]);
+    await db.settings.bulkAdd(file.settings as never[]);
+    if (file.frames?.length) await db.frames.bulkAdd(file.frames as never[]);
+    await db.photos.bulkPut(newPhotos);
+    const have = await db.photos.toCollection().primaryKeys();
+    await db.photos.bulkDelete(have.filter((id) => !want.has(id)));
+  });
+  await seedIfNeeded();
+}
+
 export function validateBackup(x: unknown): asserts x is BackupFile {
   const f = x as Partial<BackupFile> | null;
   if (!f || f.app !== 'film-shelf') throw new Error('这不是胶卷柜的备份文件');

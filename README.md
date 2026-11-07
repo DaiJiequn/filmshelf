@@ -32,3 +32,10 @@ src/db（schema、种子品种、动作、备份）· src/domain（状态机、�
 - 自动除尘引擎：[film-dust](https://github.com/magholmes/film-dust)（MIT），原样收录于 `vendor/film-dust/`，协议见该目录 `LICENSE.txt` / `NOTICES.txt`
 - 自动裁切思路：croppy（MIT）；底片转正思路：invers（MIT）、negadoctor / NegPy（仅参考思路，未复制代码）
 - TIFF 解码：utif（MIT）；RAW / 哈苏解码：libraw-wasm（ISC，LibRaw 为 LGPL）
+
+## Google Drive 同步设置（一次性）
+
+1. 打开 Google Cloud 控制台，新建项目，启用 **Google Drive API**。
+2. 「API 和服务 → OAuth 同意屏幕」：用户类型选外部，填应用名，把自己的 Google 账号加为测试用户。
+3. 「凭据 → 创建凭据 → OAuth 客户端 ID」，类型选 **Web 应用**，在「已获授权的 JavaScript 来源」里填应用的网址（如 `https://daijiequn.github.io`）。
+4. 把得到的客户端 ID 填到应用「我的 → 备份与恢复 → Google Drive 同步」里。

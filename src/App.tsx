@@ -6,6 +6,7 @@ import { TabBar } from './components/TabBar';
 import { ToastProvider } from './components/Toast';
 import { useSettings } from './lib/hooks';
 import { maybeAutoBackup } from './lib/autobackup';
+import { maybeAutoSync } from './lib/gdrive';
 import { MotionContext, type MotionLevel } from './motion/tokens';
 import { RitualProvider } from './motion/signatures/Ritual';
 import Catalog from './pages/Catalog';
@@ -61,7 +62,7 @@ export default function App() {
 
   // 自动备份：打开应用、以及回到前台时检查一次（到期才会真正备份）
   useEffect(() => {
-    const t = setTimeout(() => { maybeAutoBackup().catch(() => {}); }, 4000);
+    const t = setTimeout(() => { maybeAutoBackup().catch(() => {}); maybeAutoSync().catch(() => {}); }, 4000);
     const onVis = () => { if (document.visibilityState === 'visible') maybeAutoBackup().catch(() => {}); };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearTimeout(t); document.removeEventListener('visibilitychange', onVis); };

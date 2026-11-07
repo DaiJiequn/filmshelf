@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { useSheets } from '../components/SheetHost';
 import { useToast } from '../components/Toast';
 import { Empty, Segmented, Stepper } from '../components/ui';
+import { CloudSyncCard } from '../components/CloudSyncCard';
 import { AutoBackupCard } from '../components/AutoBackupCard';
 import { clearAll, estimateBackupSize, exportBackupBlob, importBackup, markBackedUp } from '../db/backup';
 import { SCAN_QUALITY_LABEL } from '../lib/image';
@@ -261,6 +262,7 @@ export function Backup() {
         <p className="muted small">上次备份：{settings.lastBackupAt ? fmtDate(settings.lastBackupAt) : '从未'}</p>
       </div>
       <AutoBackupCard />
+      <CloudSyncCard />
       {sizes && sizes.withScans > sizes.withoutScans + 1000 && (
         <div className="card note-card">
           <div className="seg" role="radiogroup" aria-label="备份内容">
