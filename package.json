@@ -1,0 +1,70 @@
+{
+  "name": "film-shelf",
+  "version": "1.0.0",
+  "description": "胶卷柜 个人胶卷管理",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "build:single": "vite build -c vite.single.config.ts",
+    "preview": "vite preview --host",
+    "build:app": "vite build -c vite.app.config.ts",
+    "pack": "npm run build:app && electron-builder"
+  },
+  "keywords": [],
+  "author": "film-shelf",
+  "license": "ISC",
+  "dependencies": {
+    "dexie": "^4.4.7",
+    "dexie-react-hooks": "^4.4.0",
+    "electron-updater": "^6.8.11",
+    "motion": "^14.10.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "fake-indexeddb": "^6.2.7",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.1.0"
+  },
+  "type": "module",
+  "build": {
+    "appId": "app.filmshelf.desktop",
+    "productName": "胶卷柜",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-app/**",
+      "electron/**",
+      "package.json"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.photography"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": "false",
+      "allowToChangeInstallationDirectory": "true"
+    },
+    "publish": {
+      "repo": "filmshelf"
+    }
+  }
+}

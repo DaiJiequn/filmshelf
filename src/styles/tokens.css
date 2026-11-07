@@ -1,0 +1,86 @@
+/* 设计令牌：暗房配色（深色为主，跟随系统切换浅色） */
+:root {
+  --bg: #14110f;
+  --bg-2: #1a1613;
+  --surface: #221d19;
+  --surface-2: #2d2621;
+  --line: #3a322c;
+  --text: #f3eadc;
+  --muted: #a39685;
+  --faint: #6f6458;
+  --accent: #f0a93a;
+  --accent-ink: #1a1208;
+  --danger: #ee7560;
+  --warn: #f0b44a;
+  --ok: #86b86b;
+  --info: #6fa8c9;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --tab-h: 62px;
+
+  /* 动效令牌（五档）：micro / standard / page / ritual / reduced */
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --d-micro: 120ms;
+  --d-std: 240ms;
+  --d-page: 340ms;
+  --d-ritual: 900ms;
+
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f0e5;
+    --bg-2: #efe7d9;
+    --surface: #fffaf0;
+    --surface-2: #f1e8d7;
+    --line: #dfd2bb;
+    --text: #2a2218;
+    --muted: #7a6b57;
+    --faint: #a89a84;
+    --accent: #c77a0a;
+    --accent-ink: #fff8ea;
+    --danger: #c0412c;
+    --warn: #a56a00;
+    --ok: #4d7f35;
+    --info: #2d6c93;
+    --shadow: 0 8px 24px rgba(80, 55, 20, 0.16);
+    color-scheme: light;
+  }
+}
+
+/* 简化：只保留淡入淡出，≤150ms 线性 */
+html[data-motion='lite'] {
+  --d-micro: 100ms;
+  --d-std: 150ms;
+  --d-page: 150ms;
+  --d-ritual: 150ms;
+  --ease-std: linear;
+  --ease-out: linear;
+}
+html[data-motion='lite'] *,
+html[data-motion='lite'] *::before,
+html[data-motion='lite'] *::after {
+  animation-duration: 150ms !important;
+  animation-iteration-count: 1 !important;
+}
+/* 关闭：没有任何动画 */
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion='off']::view-transition-group(*),
+html[data-motion='off']::view-transition-old(*),
+html[data-motion='off']::view-transition-new(*) {
+  animation: none !important;
+}
