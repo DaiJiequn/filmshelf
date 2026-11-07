@@ -310,7 +310,7 @@ export async function developFrame(frame: Frame, params: DevParams): Promise<Dev
     // 旧的处理版本和旧缩略图删掉；原图永远保留
     const stale = [cur.thumbId, ...(cur.origPhotoId ? [cur.photoId] : [])];
     await db.photos.bulkDelete(stale);
-    await db.frames.update(frame.id, { photoId, thumbId, width: c.width, height: c.height, origPhotoId: origId, edit: used });
+    await db.frames.update(frame.id, { photoId, thumbId, width: c.width, height: c.height, origPhotoId: origId, edit: used, dust: undefined });
   });
   return used;
 }
@@ -326,6 +326,6 @@ export async function revertFrame(frame: Frame): Promise<void> {
   await db.transaction('rw', db.photos, db.frames, async () => {
     await db.photos.add({ id: thumbId, blob: thumb.blob, width: thumb.width, height: thumb.height });
     await db.photos.bulkDelete([cur.photoId, cur.thumbId]);
-    await db.frames.update(frame.id, { photoId: cur.origPhotoId, thumbId, width: orig.width, height: orig.height, origPhotoId: undefined, edit: undefined });
+    await db.frames.update(frame.id, { photoId: cur.origPhotoId, thumbId, width: orig.width, height: orig.height, origPhotoId: undefined, edit: undefined, dust: undefined });
   });
 }

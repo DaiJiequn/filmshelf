@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { Develop } from '../components/Develop';
 import { IndexExport } from '../components/IndexExport';
+import { DustDialog } from '../components/DustDialog';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Chips, Empty } from '../components/ui';
@@ -343,6 +344,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
   const [infoOpen, setInfoOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 900);
   const [scale, setScale] = useState(1);
   const [devOpen, setDevOpen] = useState(false);
+  const [dustOpen, setDustOpen] = useState(false);
   const [cmp, setCmp] = useState(false);
   const origUrl = usePhotoUrl(frame?.origPhotoId);
   const toast = useToast();
@@ -431,6 +433,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
             <div className="row-btns">
               {frame.origPhotoId && <button className={`btn small ghost ${cmp ? 'on' : ''}`} aria-pressed={cmp} onClick={() => setCmp((c) => !c)}>前后对比</button>}
               <button className="btn small ghost" onClick={() => setDevOpen(true)}>{frame.edit ? '已处理 · 再调整' : '底片处理'}</button>
+              <button className="btn small ghost" onClick={() => setDustOpen(true)}>{frame.dust ? `已除尘 ${frame.dust.healed} 处` : '除尘'}</button>
               {url && <a className="btn small ghost" href={url} download={`frame-${frame.order + 1}.jpg`}>保存图片</a>}
               {confirmDel ? (
                 <button className="btn small danger" onClick={async () => {
@@ -446,6 +449,7 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
           </div>
         </motion.div>
       )}
+      {frame && dustOpen && <DustDialog key={frame.id} frame={frame} onClose={() => setDustOpen(false)} />}
       {frame && devOpen && <Develop key={frame.id + (frame.edit ? 'e' : 'o')} frame={frame} onClose={() => setDevOpen(false)} />}
     </AnimatePresence>,
     document.body,

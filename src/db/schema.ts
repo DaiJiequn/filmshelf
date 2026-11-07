@@ -77,6 +77,8 @@ export interface Frame {
   note?: string;
   /** 处理过时，导入时的原图（photoId 指向处理后的版本） */
   origPhotoId?: string;
+  /** 除尘记录（清除了多少处）；还原原图时一并清除 */
+  dust?: { healed: number; at: string };
   /** 上次使用的底片处理参数 */
   edit?: import('../lib/develop').DevParams;
   createdAt: string;

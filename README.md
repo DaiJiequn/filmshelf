@@ -27,3 +27,9 @@ src/db（schema、种子品种、动作、备份）· src/domain（状态机、�
 安装版（Windows .exe 安装器 / Mac .dmg）内置 electron-updater，启动时检查 GitHub Releases 的新版本。
 发布新版：改 package.json 的 version → 提交 → `git tag v1.0.1 && git push --tags`，Actions 会构建并发布到 Release，已安装的用户下次启动自动更新。
 需要在 package.json 的 build.publish 里填 GitHub 仓库（provider/owner/repo）。便携 zip 版不支持自动更新。
+
+## 第三方组件与致谢
+
+- 自动除尘引擎：[film-dust](https://github.com/magholmes/film-dust)（MIT），原样收录于 `vendor/film-dust/`，协议见该目录 `LICENSE.txt` / `NOTICES.txt`
+- 自动裁切思路：croppy（MIT）；底片转正思路：invers（MIT）、negadoctor / NegPy（仅参考思路，未复制代码）
+- TIFF 解码：utif（MIT）；RAW / 哈苏解码：libraw-wasm（ISC，LibRaw 为 LGPL）
