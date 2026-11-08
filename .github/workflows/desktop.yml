@@ -28,6 +28,7 @@ jobs:
     needs: check
     if: needs.check.outputs.needed == 'true'
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
