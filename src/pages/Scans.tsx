@@ -161,6 +161,9 @@ function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, 
   onPrev: () => void; onNext: () => void; onClose: () => void; onTap: () => void; onScale: (s: number) => void;
 }) {
   const level = useMotionLevel();
+  const [ar, setAr] = useState(0);
+  const [arC, setArC] = useState(0);
+  const ratio = (e: React.SyntheticEvent<HTMLImageElement>) => e.currentTarget.naturalWidth / Math.max(1, e.currentTarget.naturalHeight);
   const raf = useRef(0);
   const vel = useRef({ x: 0, y: 0, t: 0 });
   const stopCoast = () => { if (raf.current) { cancelAnimationFrame(raf.current); raf.current = 0; } };
@@ -349,15 +352,15 @@ function ZoomPan({ src, thumb, alt, compareSrc, onPrev, onNext, onClose, onTap, 
           transition: anim ? 'transform 220ms cubic-bezier(0.2, 0, 0, 1)' : 'none',
         }}
       >
-        {thumb && !loaded && <img className="zimg under" src={thumb} alt="" draggable={false} />}
-        {src && <img className={`zimg over ${loaded ? 'ok' : ''}`} src={src} alt={alt} draggable={false} onLoad={() => setLoaded(true)} />}
+        {thumb && !loaded && <img className="zimg under" src={thumb} alt="" draggable={false} style={{ '--ar': ar || undefined } as React.CSSProperties} onLoad={(e) => !ar && setAr(ratio(e))} />}
+        {src && <img className={`zimg over ${loaded ? 'ok' : ''}`} src={src} alt={alt} draggable={false} style={{ '--ar': ar || undefined } as React.CSSProperties} onLoad={(e) => { setAr(ratio(e)); setLoaded(true); }} />}
       </div>
       {compareSrc && (
         <>
           {/* 原图层：和上面同一个缩放/平移，只是被分割线裁掉右边 */}
           <div className="cmpclip" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}>
             <div className="zoomlayer" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, transition: anim ? 'transform 220ms cubic-bezier(0.2, 0, 0, 1)' : 'none' }}>
-              <img className="zimg" src={compareSrc} alt="原图" draggable={false} />
+              <img className="zimg" src={compareSrc} alt="原图" draggable={false} style={{ '--ar': arC || undefined } as React.CSSProperties} onLoad={(e) => setArC(ratio(e))} />
             </div>
           </div>
           <span className="cmp-tag left">原图</span><span className="cmp-tag right">处理后</span>

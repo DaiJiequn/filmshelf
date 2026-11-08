@@ -3,7 +3,7 @@ import { db, uid } from '../db/schema';
 
 /** 压缩成最长边 ~600px 的 JPEG，缩略图足够，体积小，备份也轻 */
 export async function compressImage(file: Blob, maxSide = 600, quality = 0.82): Promise<{ blob: Blob; width: number; height: number }> {
-  const bmp = await createImageBitmap(file);
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
   const w = Math.max(1, Math.round(bmp.width * scale));
   const h = Math.max(1, Math.round(bmp.height * scale));
@@ -55,6 +55,25 @@ export const SCAN_QUALITY_LABEL: Record<ScanQuality, string> = {
 
 const isTiff = (f: File) => /\.tiff?$/i.test(f.name) || f.type === 'image/tiff';
 
+/** 按 EXIF Orientation（1–8）把画布转正；1 或未知值原样返回 */
+export function orientCanvas(src: HTMLCanvasElement, o: number): HTMLCanvasElement {
+  if (!o || o === 1 || o > 8) return src;
+  const swap = o >= 5;
+  const c = document.createElement('canvas');
+  c.width = swap ? src.height : src.width;
+  c.height = swap ? src.width : src.height;
+  const g = c.getContext('2d')!;
+  const w = src.width, h = src.height;
+  // 各取向对应的变换矩阵（EXIF 标准）
+  const m: Record<number, [number, number, number, number, number, number]> = {
+    2: [-1, 0, 0, 1, w, 0], 3: [-1, 0, 0, -1, w, h], 4: [1, 0, 0, -1, 0, h],
+    5: [0, 1, 1, 0, 0, 0], 6: [0, 1, -1, 0, h, 0], 7: [0, -1, -1, 0, h, w], 8: [0, -1, 1, 0, 0, w],
+  };
+  g.setTransform(...m[o]);
+  g.drawImage(src, 0, 0);
+  return c;
+}
+
 /** 浏览器不能直接解码 TIFF（Filmer 等扫描软件常导出）：用 UTIF（MIT）解码后转成高质量 JPEG */
 export async function tiffToJpeg(file: File): Promise<Blob> {
   const UTIF = (await import('utif')).default;
@@ -64,9 +83,10 @@ export async function tiffToJpeg(file: File): Promise<Blob> {
   UTIF.decodeImage(buf, ifds[0]);
   const { width, height } = ifds[0] as { width: number; height: number };
   const rgba = UTIF.toRGBA8(ifds[0]);
-  const c = document.createElement('canvas');
-  c.width = width; c.height = height;
-  c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, rgba.length), width, height), 0, 0);
+  const src = document.createElement('canvas');
+  src.width = width; src.height = height;
+  src.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, rgba.length), width, height), 0, 0);
+  const c = orientCanvas(src, ((ifds[0] as unknown as { t274?: number[] }).t274 ?? [1])[0]);
   return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('TIFF 转换失败'))), 'image/jpeg', 0.95));
 }
 
@@ -78,7 +98,7 @@ export async function importScan(input: File, quality: ScanQuality): Promise<{ p
   const thumb = await compressImage(file, 480, 0.8);
   let full: { blob: Blob; width: number; height: number };
   if (quality === 'original') {
-    const bmp = await createImageBitmap(file);
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
     full = { blob: file, width: bmp.width, height: bmp.height };
     bmp.close?.();
   } else {

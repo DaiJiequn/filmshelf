@@ -242,7 +242,7 @@ export async function analyzeRoll(frames: Frame[], mode: DevMode): Promise<{ bas
   for (const f of frames) {
     const orig = await db.photos.get(f.origPhotoId ?? f.photoId);
     if (!orig) continue;
-    const bmp = await createImageBitmap(orig.blob);
+    const bmp = await createImageBitmap(orig.blob, { imageOrientation: 'from-image' });
     const img = rasterize(bmp, 0, false, 1000);
     bmp.close?.();
     all.push(autoAnalyze(img, mode));
@@ -267,7 +267,7 @@ export function autoFrame(bmp: ImageBitmap, mode: DevMode, rotate: number, flip:
 export async function autoFrameFor(frame: Frame, mode: DevMode, rotate: number, flip: boolean): Promise<{ angle: number; crop: Crop | null }> {
   const orig = await db.photos.get(frame.origPhotoId ?? frame.photoId);
   if (!orig) return { angle: 0, crop: null };
-  const bmp = await createImageBitmap(orig.blob);
+  const bmp = await createImageBitmap(orig.blob, { imageOrientation: 'from-image' });
   try { return autoFrame(bmp, mode, rotate, flip); } finally { bmp.close?.(); }
 }
 
@@ -280,7 +280,7 @@ export async function developFrame(frame: Frame, params: DevParams): Promise<Dev
   const origId = frame.origPhotoId ?? frame.photoId;
   const orig = await db.photos.get(origId);
   if (!orig) throw new Error('找不到原图');
-  const bmp = await createImageBitmap(orig.blob);
+  const bmp = await createImageBitmap(orig.blob, { imageOrientation: 'from-image' });
   const img = rasterize(bmp, params.rotate, params.flip, MAX_OUT, params.angle ?? 0);
   bmp.close?.();
   const used = params;

@@ -55,7 +55,7 @@ export async function renderSheets(frames: Frame[], meta: SheetMeta, o: SheetOpt
   const bmpOf = async (id: string) => {
     if (cache.has(id)) return cache.get(id)!;
     const p = await db.photos.get(id);
-    const b = p ? await createImageBitmap(p.blob) : null;
+    const b = p ? await createImageBitmap(p.blob, { imageOrientation: 'from-image' }) : null;
     cache.set(id, b);
     return b;
   };

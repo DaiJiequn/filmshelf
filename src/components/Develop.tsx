@@ -43,7 +43,7 @@ export function Develop({ frame, onClose }: { frame: Frame; onClose: () => void 
     (async () => {
       const orig = await db.photos.get(frame.origPhotoId ?? frame.photoId);
       if (!orig || dead) return;
-      const b = await createImageBitmap(orig.blob);
+      const b = await createImageBitmap(orig.blob, { imageOrientation: 'from-image' });
       if (dead) { b.close?.(); return; }
       bmp.current = b;
       let init: DevParams;

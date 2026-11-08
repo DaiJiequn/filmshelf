@@ -15,7 +15,7 @@ export function dustFrame(frame: Frame, opts: DustOpts, onProgress: (frac: numbe
     if (!cur) throw new Error('这张已被删除');
     const src = await db.photos.get(cur.photoId);
     if (!src) throw new Error('找不到图片');
-    const bmp = await createImageBitmap(src.blob);
+    const bmp = await createImageBitmap(src.blob, { imageOrientation: 'from-image' });
     const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
     const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
     const c = document.createElement('canvas');
