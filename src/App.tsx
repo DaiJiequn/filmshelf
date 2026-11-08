@@ -5,6 +5,7 @@ import { SheetsProvider } from './components/SheetHost';
 import { TabBar } from './components/TabBar';
 import { ToastProvider } from './components/Toast';
 import { useSettings } from './lib/hooks';
+import { UpdatePrompt } from './components/UpdatePrompt';
 import { maybeAutoBackup } from './lib/autobackup';
 import { maybeAutoSync } from './lib/gdrive';
 import { MotionContext, scaled, useMotionLevel, type MotionLevel } from './motion/tokens';
@@ -95,6 +96,7 @@ export default function App() {
             <SheetsProvider>
               <div className="app">
                 <Pages />
+                <UpdatePrompt />
                 <TabBar />
               </div>
             </SheetsProvider>
