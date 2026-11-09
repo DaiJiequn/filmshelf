@@ -5,16 +5,18 @@ import { SPRING, useMotionLevel } from '../motion/tokens';
 import { FilmProgress } from './FilmProgress';
 import { CountUp } from './NumberRoll';
 import { Thumb } from '../pages/Scans';
+import { digitState, isDeveloped } from '../domain/digital';
 
-/** 一卷算“已数字化”：有扫描件，或登记过扫描方式 */
-export const isDigitized = (r: Roll, frameRolls: Set<string>) => frameRolls.has(r.id) || (!!r.neg?.scanned && r.neg.scanned !== 'none');
 
 /** 数字底片总览：已数字化进度、扫描件张数、待扫描卷数，以及最近扫描的几张 */
-export function DigitalHero({ rolls, frames, strip = false }: { rolls: Roll[]; frames: Frame[]; strip?: boolean }) {
+export function DigitalHero({ rolls, frames, strip = false, onPending }: { rolls: Roll[]; frames: Frame[]; strip?: boolean; onPending?: () => void }) {
   const level = useMotionLevel();
-  const back = rolls.filter((r) => r.status === 'back' || r.status === 'archived');
-  const frameRolls = new Set(frames.map((f) => f.rollId));
-  const done = back.filter((r) => isDigitized(r, frameRolls)).length;
+  const counts = new Map<string, number>();
+  for (const f of frames) counts.set(f.rollId, (counts.get(f.rollId) ?? 0) + 1);
+  const back = rolls.filter((r) => isDeveloped(r, counts.get(r.id) ?? 0));
+  // 进度只算扫描件已经入库的卷；只登记了「扫过」但没导入的，单独提示
+  const done = back.filter((r) => counts.has(r.id)).length;
+  const external = back.filter((r) => digitState(r, counts.get(r.id) ?? 0) === 'external').length;
   const pending = back.length - done;
   const ratio = back.length ? done / back.length : 0;
   const recent = strip ? [...frames].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')).slice(0, 9) : [];
@@ -47,8 +49,10 @@ export function DigitalHero({ rolls, frames, strip = false }: { rolls: Roll[]; f
       </div>
       <FilmProgress value={ratio} />
       <div className="dhero-meta">
-        <span>已数字化 <b><CountUp value={done} /></b> / {back.length} 卷</span>
-        {pending > 0 ? <Link to="/negatives" className="dhero-link">待扫描 {pending} 卷 ›</Link> : back.length > 0 ? <span className="dhero-ok">全部数字化 ✓</span> : null}
+        <span>已入库 <b><CountUp value={done} /></b> / {back.length} 卷{external > 0 ? ` · ${external} 卷扫过未导入` : ''}</span>
+        {pending > 0 ? (onPending
+          ? <button className="dhero-link" onClick={onPending}>待导入 {pending} 卷 ›</button>
+          : <Link to="/" className="dhero-link">待导入 {pending} 卷 ›</Link>) : back.length > 0 ? <span className="dhero-ok">全部数字化 ✓</span> : null}
       </div>
       {strip && recent.length > 0 && (
         <div className="dhero-strip" aria-label="最近扫描">

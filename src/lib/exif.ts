@@ -11,6 +11,7 @@ export interface ExifInfo {
   shutter?: string; // 1/125 或 2
   aperture?: string; // f/2.8
   focal?: string; // 50mm
+  lens?: string; // 镜头名
   software?: string;
 }
 
@@ -93,6 +94,7 @@ export function buildExifSegment(info: ExifInfo): Uint8Array {
   }
   const fl = parseRational(info.focal);
   if (fl) exif.push(rational(0x920a, fl));
+  if (info.lens) exif.push(ascii(0xa434, info.lens));
 
   // IFD0 里要放一个指向 Exif IFD 的指针，先占位算出长度
   ifd0.push(long(0x8769, 0));

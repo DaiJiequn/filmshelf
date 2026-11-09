@@ -229,6 +229,7 @@ export async function addPastRolls(
     cameraId: input.cameraId || undefined,
     loadedAt: at,
     unloadedAt: at,
+    dateUnknown: raw ? undefined : true,
     labVisitId: visitId,
     rating: input.finalStatus === 'archived' && input.rating ? input.rating : undefined,
     note: input.note || undefined,
@@ -252,23 +253,30 @@ export async function addPastRolls(
 }
 
 
-/** 导入扫描件：按文件名自然排序，依次压缩入库。单张失败不影响其他张。 */
+/** 导入扫描件：按文件名自然排序，依次压缩入库。单张失败不影响其他张；这一卷里已导入过的同名同大小文件会跳过。 */
 export async function addFrames(
   rollId: string,
   files: File[],
   quality: ScanQuality,
   onProgress?: (done: number, total: number) => void,
-): Promise<{ added: number; failed: string[] }> {
-  const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  const last = await db.frames.where('rollId').equals(rollId).sortBy('order');
-  let order = last.length ? last[last.length - 1].order + 1 : 0;
+): Promise<{ added: number; failed: string[]; skipped: number }> {
+  const existing = await db.frames.where('rollId').equals(rollId).sortBy('order');
+  const seen = new Set(existing.filter((f) => f.srcName).map((f) => `${f.srcName}|${f.srcSize}`));
+  const fresh: File[] = [];
+  for (const f of files) {
+    const k = `${f.name}|${f.size}`;
+    if (!seen.has(k)) { seen.add(k); fresh.push(f); }
+  }
+  const skipped = files.length - fresh.length;
+  const sorted = fresh.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  let order = existing.length ? existing[existing.length - 1].order + 1 : 0;
   const failed: string[] = [];
   let added = 0;
   for (let i = 0; i < sorted.length; i++) {
     onProgress?.(i, sorted.length);
     try {
       const img = await importScan(sorted[i], quality);
-      const frame: Frame = { id: uid(), rollId, order: order++, ...img, createdAt: nowIso() };
+      const frame: Frame = { id: uid(), rollId, order: order++, ...img, srcName: sorted[i].name, srcSize: sorted[i].size, createdAt: nowIso() };
       await db.frames.add(frame);
       added++;
     } catch {
@@ -276,7 +284,44 @@ export async function addFrames(
     }
   }
   onProgress?.(sorted.length, sorted.length);
-  return { added, failed };
+  return { added, failed, skipped };
+}
+
+/** 把一张往前/往后挪一位（与相邻的一张交换张号） */
+export async function moveFrame(id: string, dir: -1 | 1): Promise<void> {
+  await db.transaction('rw', db.frames, async () => {
+    const f = await db.frames.get(id);
+    if (!f) return;
+    const list = await db.frames.where('rollId').equals(f.rollId).sortBy('order');
+    const i = list.findIndex((x) => x.id === id);
+    const other = list[i + dir];
+    if (!other) return;
+    await db.frames.update(f.id, { order: other.order });
+    await db.frames.update(other.id, { order: f.order });
+  });
+}
+
+/** 重新编号：按现在的顺序排成 1、2、3…（删除后留下的空号会被补上） */
+export async function renumberFrames(rollId: string): Promise<void> {
+  await db.transaction('rw', db.frames, async () => {
+    const list = await db.frames.where('rollId').equals(rollId).sortBy('order');
+    await Promise.all(list.map((f, i) => (f.order === i ? undefined : db.frames.update(f.id, { order: i }))));
+  });
+}
+
+/** 把一张的某些信息套用到同卷里还没填的那些张，返回改了几张 */
+export async function applyToRoll(frameId: string, keys: ('place' | 'focal' | 'lens')[]): Promise<number> {
+  const src = await db.frames.get(frameId);
+  if (!src) return 0;
+  const list = await db.frames.where('rollId').equals(src.rollId).toArray();
+  let n = 0;
+  for (const f of list) {
+    if (f.id === src.id) continue;
+    const patch: Partial<Frame> = {};
+    for (const k of keys) if (src[k] && !f[k]) patch[k] = src[k];
+    if (Object.keys(patch).length) { await db.frames.update(f.id, patch); n++; }
+  }
+  return n;
 }
 
 export async function updateFrame(id: string, patch: Partial<Frame>): Promise<void> {

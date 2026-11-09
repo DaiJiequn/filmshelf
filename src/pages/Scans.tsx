@@ -2,9 +2,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Develop } from '../components/Develop';
-import { exportRollScans } from '../lib/exportScans';
+import { exportFrame, exportRollScans } from '../lib/exportScans';
+import { takePendingImport } from '../lib/pendingImport';
+import { STATUS_LABEL } from '../domain/roll-state';
 import { saveBlob } from '../lib/contact';
 import { IndexExport } from '../components/IndexExport';
 import { DustDialog } from '../components/DustDialog';
@@ -12,7 +14,7 @@ import { FilmProgress } from '../components/FilmProgress';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Chips, Empty } from '../components/ui';
-import { addFrames, deleteFrame, updateFrame } from '../db/actions';
+import { addFrames, applyToRoll, deleteFrame, moveFrame, renumberFrames, returnFromLab, updateFrame } from '../db/actions';
 import { db, type Frame } from '../db/schema';
 import { usePhotoUrl, useSettings } from '../lib/hooks';
 import { EASE_OUT, scaled, SPRING, useMotionLevel } from '../motion/tokens';
@@ -58,17 +60,38 @@ export default function Scans() {
     return () => clearTimeout(t);
   });
 
-  const onFiles = useCallback(async (files: FileList | null) => {
+  const onFiles = useCallback(async (files: FileList | File[] | null) => {
     if (!files?.length) return;
     setProgress({ done: 0, total: files.length });
     const res = await addFrames(id, [...files], settings.scanQuality, (done, total) => setProgress({ done, total }));
     setProgress(null);
-    if (res.failed.length) {
+    const skip = res.skipped ? `，跳过 ${res.skipped} 张已导入过的` : '';
+    if (!res.added && !res.failed.length && res.skipped) {
+      toast.show(`这 ${res.skipped} 张都已经导入过了`);
+    } else if (res.failed.length) {
       toast.show(`导入 ${res.added} 张，${res.failed.length} 张失败（${res.failed.slice(0, 2).join('、')}${res.failed.length > 2 ? '…' : ''}）。可能是文件损坏或格式不支持。`, { tone: 'error' });
     } else {
-      toast.show(`已导入 ${res.added} 张扫描件`);
+      toast.show(`已导入 ${res.added} 张扫描件${skip}`);
     }
   }, [id, settings.scanQuality, toast]);
+
+  // 从底片库「先选扫描件、再选卷」过来时，把暂存的文件直接导入
+  useEffect(() => {
+    const files = takePendingImport(id);
+    if (files?.length) void onFiles(files);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // 链接里带 ?f=<张 id> 时直接打开那一张（底片库搜索结果会用到）
+  const [params, setParams] = useSearchParams();
+  const want = params.get('f');
+  useEffect(() => {
+    if (!want || !data) return;
+    const i = data.frames.findIndex((f) => f.id === want);
+    if (i >= 0) setOpen(i);
+    setParams({}, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [want, !!data]);
 
   if (!data) return <div className="page" />;
   const { roll, stock, frames } = data;
@@ -88,6 +111,19 @@ export default function Scans() {
         <div className="card progress-import" role="status">
           <span>正在导入 {Math.min(progress.done + 1, progress.total)} / {progress.total}…</span>
           <FilmProgress value={progress.done / progress.total} />
+        </div>
+      )}
+
+      {frames.length > 0 && roll.status === 'at-lab' && (
+        <div className="banner">
+          <span>这卷已经有扫描件了，但还标记为「{STATUS_LABEL[roll.status]}」。</span>
+          <button className="btn small" onClick={async () => { await returnFromLab([roll.id]); toast.show('已标记为已取回'); }}>标记为已取回</button>
+        </div>
+      )}
+      {frames.some((f, i) => f.order !== i) && (
+        <div className="banner">
+          <span>张号不连续（删除过几张）。</span>
+          <button className="btn small" onClick={async () => { await renumberFrames(roll.id); toast.show('已重新编号'); }}>重新编号</button>
         </div>
       )}
 
@@ -156,10 +192,11 @@ function chunk<T>(a: T[], n: number): T[][] {
   return out;
 }
 
-const FIELDS: { key: 'shutter' | 'aperture' | 'focal' | 'place' | 'note'; label: string; ph: string; wide?: boolean }[] = [
+const FIELDS: { key: 'shutter' | 'aperture' | 'focal' | 'lens' | 'place' | 'note'; label: string; ph: string; wide?: boolean }[] = [
   { key: 'shutter', label: '快门', ph: '1/125' },
   { key: 'aperture', label: '光圈', ph: 'f/2.8' },
   { key: 'focal', label: '焦距', ph: '50mm' },
+  { key: 'lens', label: '镜头', ph: 'Nikkor 50mm f/1.4' },
   { key: 'place', label: '地点', ph: '京都 · 清水寺' },
   { key: 'note', label: '备注', ph: '这一张的想法', wide: true },
 ];
@@ -533,13 +570,24 @@ function Viewer({ frames, index, setIndex }: { frames: Frame[]; index: number | 
                     />
                   </label>
                 ))}
+                {(frame.place || frame.focal || frame.lens) && frames.length > 1 && (
+                  <button className="btn small ghost wide" onClick={async () => {
+                    const n = await applyToRoll(frame.id, ['place', 'focal', 'lens']);
+                    toast.show(n ? `已把地点 / 焦距 / 镜头套用到另外 ${n} 张（只填空白的）` : '其他张都已经填过了');
+                  }}>把地点 / 焦距 / 镜头套用到整卷</button>
+                )}
               </div>
             )}
             <div className="row-btns">
               {frame.origPhotoId && <button className={`btn small ghost ${cmp ? 'on' : ''}`} aria-pressed={cmp} onClick={() => setCmp((c) => !c)}>前后对比</button>}
               <button className="btn small ghost" onClick={() => setDevOpen(true)}>{frame.edit ? '已处理 · 再调整' : '底片处理'}</button>
               <button className="btn small ghost" onClick={() => setDustOpen(true)}>{frame.dust ? `已除尘 ${frame.dust.healed} 处` : '除尘'}</button>
-              {url && <a className="btn small ghost" href={url} download={`frame-${frame.order + 1}.jpg`}>保存图片</a>}
+              <button className="btn small ghost" onClick={async () => {
+                const out = await exportFrame(frame).catch(() => null);
+                if (out) saveBlob(out.blob, out.name); else toast.show('保存失败', { tone: 'error' });
+              }}>保存图片</button>
+              <button className="btn small ghost" disabled={index === 0} onClick={async () => { await moveFrame(frame.id, -1); setIndex(index! - 1); }} aria-label="往前挪一张">← 前移</button>
+              <button className="btn small ghost" disabled={index === frames.length - 1} onClick={async () => { await moveFrame(frame.id, 1); setIndex(index! + 1); }} aria-label="往后挪一张">后移 →</button>
               {confirmDel ? (
                 <button className="btn small danger" onClick={async () => {
                   const i = index!;

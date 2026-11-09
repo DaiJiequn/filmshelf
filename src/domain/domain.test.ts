@@ -151,4 +151,26 @@ describe('补录旧胶卷', () => {
     expect(await db.rolls.count()).toBe(0);
     expect(await db.labVisits.count()).toBe(0);
   });
+  it('没填日期的补录卷标记为日期未知；扫描件可挪动、重新编号、套用信息', async () => {
+    const { addPastRolls, moveFrame, renumberFrames, applyToRoll } = await import('../db/actions');
+    const { shotDate, digitState, localDate } = await import('./digital');
+    const r = await addPastRolls({ stockId: 'kodak-gold-200', format: '135', count: 1, finalStatus: 'back' });
+    const roll = (await db.rolls.get(r.ids[0]))!;
+    expect(shotDate(roll)).toBeUndefined();
+    expect(digitState(roll, 0)).toBe('none');
+    expect(digitState({ ...roll, neg: { scanned: 'lab' } }, 0)).toBe('external');
+    expect(digitState(roll, 3)).toBe('in');
+    const d = new Date(2024, 4, 1, 6, 30); // 本地早上：UTC 可能还是前一天
+    expect(localDate(d.toISOString())).toBe('2024-05-01');
+    const mk = (id: string, order: number, extra = {}) => ({ id, rollId: roll.id, order, photoId: 'p' + id, thumbId: 't' + id, width: 3, height: 2, createdAt: 'x', ...extra });
+    await db.frames.bulkAdd([mk('a', 0, { place: '京都' }), mk('b', 1), mk('c', 3, { place: '奈良' })]);
+    await moveFrame('a', 1);
+    const ord = async () => (await db.frames.where('rollId').equals(roll.id).sortBy('order')).map((f) => `${f.id}${f.order}`).join(',');
+    expect(await ord()).toBe('b0,a1,c3');
+    await renumberFrames(roll.id);
+    expect(await ord()).toBe('b0,a1,c2');
+    expect(await applyToRoll('a', ['place', 'focal', 'lens'])).toBe(1);
+    expect((await db.frames.get('b'))?.place).toBe('京都');
+    expect((await db.frames.get('c'))?.place).toBe('奈良');
+  });
 });

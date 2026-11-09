@@ -485,7 +485,7 @@ button.menu-row { background: none; }
 .dhero-pct { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; font-weight: 800; }
 .dhero-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: #cdbfa9; }
 .dhero-meta b { color: #f3eadc; }
-.dhero-link { color: var(--accent); font-weight: 800; text-decoration: none; }
+.dhero-link { color: var(--accent); font-weight: 800; text-decoration: none; background: none; border: 0; padding: 0; font: inherit; font-weight: 800; cursor: pointer; }
 .dhero-ok { color: #8fd19a; font-weight: 700; }
 .dhero-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .dhero-strip::-webkit-scrollbar { display: none; }
@@ -510,3 +510,8 @@ button.menu-row { background: none; }
 .lib-cell i { position: absolute; left: 3px; bottom: 1px; font-size: 9px; font-style: normal; color: #f5a623; text-shadow: 0 1px 2px #000; }
 .lib-more { flex: none; align-self: center; padding: 0 10px; color: #cdbfa9; font-size: 12px; }
 @media (min-width: 720px) { .lib-cell { width: 110px; } }
+.sheet-h { margin: 8px 0 0; font-size: 13px; color: var(--muted, #8a7f72); font-weight: 700; }
+.lib-strip .lib-more { text-decoration: none; }
+.page.drop-on { outline: 2px dashed var(--accent); outline-offset: -8px; border-radius: 16px; }
+.drop-hint { position: sticky; top: 8px; z-index: 5; margin: 0 0 10px; padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; color: #fff; background: var(--accent); }
+.viewer-fields .btn.wide { grid-column: 1 / -1; }

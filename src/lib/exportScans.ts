@@ -1,6 +1,7 @@
 import { db, type Frame, type Roll } from '../db/schema';
 import { injectExif, makeZip, type ExifInfo } from './exif';
 import { FORMAT_LABEL } from './hooks';
+import { shotDate } from '../domain/digital';
 
 const safe = (s: string) => s.replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
 
@@ -24,12 +25,7 @@ const csvCell = (v: unknown) => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-/** 导出一卷的扫描件：每张 JPEG 写入 EXIF（相机/片种/ISO/日期/快门光圈焦距/备注），附 metadata.csv，打成 ZIP */
-export async function exportRollScans(
-  roll: Roll,
-  frames: Frame[],
-  onProgress?: (done: number, total: number) => void,
-): Promise<{ blob: Blob; name: string }> {
+async function rollContext(roll: Roll) {
   const [stock, camera, visit] = await Promise.all([
     db.stocks.get(roll.stockId),
     roll.cameraId ? db.cameras.get(roll.cameraId) : undefined,
@@ -37,24 +33,47 @@ export async function exportRollScans(
   ]);
   const lab = visit ? await db.labs.get(visit.labId) : undefined;
   const stockName = stock ? `${stock.brand} ${stock.name}` : '';
-  const date = roll.unloadedAt ?? roll.loadedAt;
+  const date = shotDate(roll);
   const iso = roll.shotIso ?? stock?.iso;
   const rollTag = safe([stockName, date ?? ''].filter(Boolean).join('_')) || 'roll';
-  const files: { name: string; data: Uint8Array }[] = [];
-  const rows = [['文件名', '张号', '片种', '画幅', 'ISO', '相机', '拍摄日期', '冲扫店', '快门', '光圈', '焦距', '地点', '备注'].join(',')];
+  return { camera, lab, stockName, date, iso, rollTag };
+}
+type Ctx = Awaited<ReturnType<typeof rollContext>>;
 
+async function frameFile(roll: Roll, f: Frame, c: Ctx): Promise<{ name: string; data: Uint8Array } | null> {
+  const raw = await jpegBytes(f.photoId);
+  if (!raw) return null;
+  const desc = [c.stockName, FORMAT_LABEL[roll.format], `第 ${f.order + 1} 张`, f.place, f.note].filter(Boolean).join(' · ');
+  const info: ExifInfo = { model: c.camera?.name, description: desc, iso: c.iso, date: c.date, shutter: f.shutter, aperture: f.aperture, focal: f.focal, lens: f.lens };
+  return { name: `${c.rollTag}_${String(f.order + 1).padStart(3, '0')}.jpg`, data: injectExif(raw, info) };
+}
+
+/** 导出单张：和整卷导出一样写入 EXIF、用同一套文件名 */
+export async function exportFrame(f: Frame): Promise<{ blob: Blob; name: string } | null> {
+  const roll = await db.rolls.get(f.rollId);
+  if (!roll) return null;
+  const file = await frameFile(roll, f, await rollContext(roll));
+  return file ? { blob: new Blob([file.data as BlobPart], { type: 'image/jpeg' }), name: file.name } : null;
+}
+
+/** 导出一卷的扫描件：每张 JPEG 写入 EXIF（相机/片种/ISO/日期/快门光圈焦距/镜头/备注），附 metadata.csv，打成 ZIP */
+export async function exportRollScans(
+  roll: Roll,
+  frames: Frame[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ blob: Blob; name: string }> {
+  const c = await rollContext(roll);
+  const files: { name: string; data: Uint8Array }[] = [];
+  const rows = [['文件名', '张号', '片种', '画幅', 'ISO', '相机', '拍摄日期', '冲扫店', '快门', '光圈', '焦距', '镜头', '地点', '备注'].join(',')];
   for (let i = 0; i < frames.length; i++) {
     const f = frames[i];
-    const raw = await jpegBytes(f.photoId);
-    if (raw) {
-      const desc = [stockName, FORMAT_LABEL[roll.format], `第 ${f.order + 1} 张`, f.place, f.note].filter(Boolean).join(' · ');
-      const info: ExifInfo = { model: camera?.name, description: desc, iso, date, shutter: f.shutter, aperture: f.aperture, focal: f.focal };
-      const name = `${rollTag}_${String(f.order + 1).padStart(3, '0')}.jpg`;
-      files.push({ name, data: injectExif(raw, info) });
-      rows.push([name, f.order + 1, stockName, FORMAT_LABEL[roll.format], iso, camera?.name, date, lab?.name, f.shutter, f.aperture, f.focal, f.place, f.note].map(csvCell).join(','));
+    const file = await frameFile(roll, f, c);
+    if (file) {
+      files.push(file);
+      rows.push([file.name, f.order + 1, c.stockName, FORMAT_LABEL[roll.format], c.iso, c.camera?.name, c.date, c.lab?.name, f.shutter, f.aperture, f.focal, f.lens, f.place, f.note].map(csvCell).join(','));
     }
     onProgress?.(i + 1, frames.length);
   }
-  files.push({ name: 'metadata.csv', data: new TextEncoder().encode('﻿' + rows.join('\r\n')) });
-  return { blob: makeZip(files), name: `${rollTag}.zip` };
+  files.push({ name: 'metadata.csv', data: new TextEncoder().encode('\ufeff' + rows.join('\r\n')) });
+  return { blob: makeZip(files), name: `${c.rollTag}.zip` };
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { db, type Frame } from '../db/schema';
 import { canvasesToPdf, canvasToPngBlob, renderSheets, saveBlob, type BandStyle, type Paper, type SheetLayout, type SheetMeta } from '../lib/contact';
 import { fmtDate, FORMAT_LABEL } from '../lib/hooks';
+import { shotDate } from '../domain/digital';
 import { Overlay } from './Overlay';
 import { useToast } from './Toast';
 import { Chips } from './ui';
@@ -30,7 +31,7 @@ export function IndexExport({ rollId, frames, onClose }: { rollId: string; frame
       const lab = visit ? await db.labs.get(visit.labId) : undefined;
       const name = stock ? `${stock.brand} ${stock.name}` : '胶卷索引';
       const l1 = [stock ? `ISO ${roll.shotIso ?? stock.iso}` : '', FORMAT_LABEL[roll.format], `${frames.length} 张`].filter(Boolean).join(' · ');
-      const l2 = [camera?.name, roll.loadedAt ? fmtDate(roll.loadedAt) : ''].filter(Boolean).join(' · ');
+      const l2 = [camera?.name, shotDate(roll) ? fmtDate(shotDate(roll)) : ''].filter(Boolean).join(' · ');
       const l3 = [lab?.name, visit?.backAt ? `取回 ${fmtDate(visit.backAt)}` : ''].filter(Boolean).join(' · ');
       setMeta({ title: name, lines: [l1, l2, l3].filter(Boolean), format: roll.format, edgeText: stock?.name ?? '', bw: stock?.type === 'bw' });
     })();

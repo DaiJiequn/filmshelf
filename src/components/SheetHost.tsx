@@ -1,3 +1,4 @@
+import { claimPendingImport } from '../lib/pendingImport';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
@@ -779,6 +780,7 @@ function PastSheet({ state, onClose, api }: { state: { stockId?: string } | null
       }
       toast.show(`已补录 ${ids.length} 卷 ${stock.name}${ids.length === 1 ? '，现在导入扫描件' : ''}`, { undo });
       // 补录一卷时直接进入它的扫描件页，好把扫描件导进来
+      if (ids.length === 1) claimPendingImport(ids[0]);
       if (ids.length === 1) window.location.hash = `#/roll/${ids[0]}/scans`;
     } catch (e) {
       toast.show((e as Error).message, { tone: 'error' });

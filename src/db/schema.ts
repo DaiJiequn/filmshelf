@@ -51,6 +51,8 @@ export interface Roll {
   cameraId?: string;
   loadedAt?: string;
   unloadedAt?: string;
+  /** 补录时没填拍摄日期：loadedAt 只是占位，不当作拍摄日期用 */
+  dateUnknown?: boolean;
   framesShot?: number;
   labVisitId?: string;
   rating?: number;
@@ -73,6 +75,7 @@ export interface Frame {
   shutter?: string; // 例如 1/125
   aperture?: string; // 例如 f/2.8
   focal?: string; // 例如 50mm
+  lens?: string; // 例如 Nikkor 50mm f/1.4
   place?: string;
   note?: string;
   /** 处理过时，导入时的原图（photoId 指向处理后的版本） */
@@ -81,6 +84,9 @@ export interface Frame {
   dust?: { healed: number; at: string };
   /** 上次使用的底片处理参数 */
   edit?: import('../lib/develop').DevParams;
+  /** 导入时的原文件名与大小，用来避免同一文件重复导入 */
+  srcName?: string;
+  srcSize?: number;
   createdAt: string;
 }
 
