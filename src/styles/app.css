@@ -491,3 +491,22 @@ button.menu-row { background: none; }
 .dhero-strip::-webkit-scrollbar { display: none; }
 .dhero-thumb { flex: none; width: 56px; height: 56px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid #3a2f27; display: block; }
 .dhero-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* 数字底片库 */
+.pend-row { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; }
+.pend-row::-webkit-scrollbar { display: none; }
+.pend-row .pend-card { flex: none; width: 160px; max-width: 160px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
+.pend-cta { margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--accent); }
+.lib-list { display: flex; flex-direction: column; gap: 10px; }
+.lib-roll { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.lib-head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px; background: none; border: 0; color: inherit; text-align: left; font: inherit; cursor: pointer; width: 100%; }
+.lib-head .grow { min-width: 0; }
+.lib-strip { display: flex; gap: 4px; padding: 10px 8px; background: #080706; overflow-x: auto; scrollbar-width: none; text-decoration: none; position: relative; }
+.lib-strip::-webkit-scrollbar { display: none; }
+.lib-strip::before, .lib-strip::after { content: ""; position: absolute; left: 0; right: 0; height: 4px; background: repeating-linear-gradient(90deg, #2a241f 0 6px, transparent 6px 12px); }
+.lib-strip::before { top: 3px; } .lib-strip::after { bottom: 3px; }
+.lib-cell { position: relative; flex: none; width: 84px; aspect-ratio: 3 / 2; overflow: hidden; background: #1d1a17; }
+.lib-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lib-cell i { position: absolute; left: 3px; bottom: 1px; font-size: 9px; font-style: normal; color: #f5a623; text-shadow: 0 1px 2px #000; }
+.lib-more { flex: none; align-self: center; padding: 0 10px; color: #cdbfa9; font-size: 12px; }
+@media (min-width: 720px) { .lib-cell { width: 110px; } }

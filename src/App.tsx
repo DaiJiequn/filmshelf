@@ -11,7 +11,8 @@ import { maybeAutoSync } from './lib/gdrive';
 import { MotionContext, scaled, useMotionLevel, type MotionLevel } from './motion/tokens';
 import { RitualProvider } from './motion/signatures/Ritual';
 import Catalog from './pages/Catalog';
-import Home from './pages/Home';
+import Library from './pages/Library';
+import Shoot from './pages/Shoot';
 import { Backup, Cameras, Labs, Locations, Me, SettingsPage } from './pages/Me';
 import Negatives from './pages/Negatives';
 import Playground from './pages/Playground';
@@ -25,7 +26,7 @@ function useReducedMotion(): boolean {
   return !!q?.matches;
 }
 
-const TAB_ORDER = ['/', '/stock', '/catalog', '/negatives', '/me'];
+const TAB_ORDER = ['/', '/negatives', '/shoot', '/stock', '/me'];
 const depthOf = (p: string) => p.split('/').filter(Boolean).length;
 const tabOf = (p: string) => TAB_ORDER.indexOf('/' + (p.split('/')[1] ?? ''));
 
@@ -50,7 +51,8 @@ function Pages() {
   return (
     <motion.main key={key} className="app-main" initial={{ opacity: 0, y: dir ? 0 : 6, x }} animate={{ opacity: 1, y: 0, x: 0 }} transition={{ duration: scaled(level, 0.28), ease: [0.2, 0, 0, 1] }}>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Library />} />
+        <Route path="/shoot" element={<Shoot />} />
         <Route path="/stock" element={<Stock />} />
         <Route path="/roll/:id" element={<RollDetail />} />
         <Route path="/roll/:id/scans" element={<Scans />} />
@@ -64,7 +66,7 @@ function Pages() {
         <Route path="/me/backup" element={<Backup />} />
         <Route path="/me/settings" element={<SettingsPage />} />
         <Route path="/me/lab" element={<Playground />} />
-        <Route path="*" element={<Home />} />
+        <Route path="*" element={<Library />} />
       </Routes>
     </motion.main>
   );

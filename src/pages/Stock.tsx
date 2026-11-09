@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { AnimatePresence, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
@@ -57,7 +58,7 @@ export default function Stock() {
 
   return (
     <div className="page">
-      <PageHeader title="库存" sub={`${STATUS_LABEL[status as RollStatus] ?? '全部'} · ${total} 卷`} right={<div className="row-btns"><button className="btn small" onClick={() => sheets.openPast()}>补录旧卷</button><button className="btn small primary" onClick={() => sheets.openInStock()}>＋ 入库</button></div>} />
+      <PageHeader title="库存" sub={`${STATUS_LABEL[status as RollStatus] ?? '全部'} · ${total} 卷`} right={<div className="row-btns"><Link to="/catalog" className="btn small">图鉴</Link><button className="btn small primary" onClick={() => sheets.openInStock()}>＋ 入库</button></div>} />
       <div className="filters">
         <Chips<StatusFilter>
           value={status}

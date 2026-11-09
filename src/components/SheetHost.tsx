@@ -777,7 +777,9 @@ function PastSheet({ state, onClose, api }: { state: { stockId?: string } | null
         ]);
         await ritual.play('light', { stock, litCount: lit, litTotal: total });
       }
-      toast.show(`已补录 ${ids.length} 卷 ${stock.name}`, { undo });
+      toast.show(`已补录 ${ids.length} 卷 ${stock.name}${ids.length === 1 ? '，现在导入扫描件' : ''}`, { undo });
+      // 补录一卷时直接进入它的扫描件页，好把扫描件导进来
+      if (ids.length === 1) window.location.hash = `#/roll/${ids[0]}/scans`;
     } catch (e) {
       toast.show((e as Error).message, { tone: 'error' });
     } finally {

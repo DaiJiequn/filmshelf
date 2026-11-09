@@ -2,7 +2,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { CountUp } from '../components/NumberRoll';
-import { DigitalHero } from '../components/DigitalHero';
 import { Canister } from '../components/Canister';
 import { PageHeader } from '../components/PageHeader';
 import { RollCard } from '../components/RollCard';
@@ -14,21 +13,19 @@ import { FORMAT_LABEL, useSettings } from '../lib/hooks';
 import { useGo } from '../lib/nav';
 import { SPRING, useMotionLevel } from '../motion/tokens';
 
-const BACKUP_DAYS = 30;
-
-export default function Home() {
+export default function Shoot() {
   const sheets = useSheets();
   const go = useGo();
   const level = useMotionLevel();
   const [settings] = useSettings();
   const data = useLiveQuery(async () => {
-    const [cameras, rolls, stocks, visits, labs, frames] = await Promise.all([
-      db.cameras.filter((c) => !c.retired).toArray(), db.rolls.toArray(), db.stocks.toArray(), db.labVisits.toArray(), db.labs.toArray(), db.frames.toArray(),
+    const [cameras, rolls, stocks, visits, labs] = await Promise.all([
+      db.cameras.filter((c) => !c.retired).toArray(), db.rolls.toArray(), db.stocks.toArray(), db.labVisits.toArray(), db.labs.toArray(),
     ]);
-    return { cameras, rolls, stocks, visits, labs, frames };
+    return { cameras, rolls, stocks, visits, labs };
   }, []);
   if (!data) return <div className="page" />;
-  const { cameras, rolls, stocks, visits, labs, frames } = data;
+  const { cameras, rolls, stocks, visits, labs } = data;
   const stockOf = (id: string) => stocks.find((s) => s.id === id);
   const now = new Date();
 
@@ -41,14 +38,11 @@ export default function Home() {
     .sort((a, b) => (a.expiry ?? '').localeCompare(b.expiry ?? ''));
   const activeVisits = visits.filter((v) => !v.backAt).sort((a, b) => a.sentAt.localeCompare(b.sentAt));
 
-  const first = rolls.length ? rolls.reduce((m, r) => (r.createdAt < m ? r.createdAt : m), rolls[0].createdAt) : undefined;
-  const lastBackup = settings.lastBackupAt ?? first;
-  const backupDue = rolls.length > 0 && !!lastBackup && daysBetween(lastBackup, now) >= BACKUP_DAYS;
 
   if (!rolls.length && !cameras.length) {
     return (
       <div className="page">
-        <PageHeader title="胶卷柜" sub="你的胶卷从这里开始" />
+        <PageHeader title="拍摄" sub="从入库到冲洗取回" />
         <Empty
           title="还没有胶卷"
           text="先把手边的胶卷入库，再添加一台相机，就可以开始记录每一卷的去向。"
@@ -69,19 +63,10 @@ export default function Home() {
   return (
     <div className="page">
       <PageHeader
-        title="胶卷柜"
+        title="拍摄"
         sub={`${now.getMonth() + 1} 月 ${now.getDate()} 日 · 库存 ${inStock.length} 卷`}
         right={<button className="btn small primary" onClick={() => sheets.openInStock()}>＋ 入库</button>}
       />
-
-      <DigitalHero rolls={rolls} frames={frames} strip />
-
-      {backupDue && (
-        <motion.div className="banner" {...list(0)}>
-          <span>已经 {daysBetween(lastBackup!, now)} 天没有备份了，数据只存在这台设备上。</span>
-          <Link to="/me/backup" className="btn small">去备份</Link>
-        </motion.div>
-      )}
 
       <motion.section className="section" {...list(1)}>
         <h2>在机 <small><CountUp value={loaded.length} />/{cameras.length}</small></h2>
