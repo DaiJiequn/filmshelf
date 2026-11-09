@@ -174,11 +174,11 @@ export default function RollDetail() {
       {(roll.status === 'back' || roll.status === 'archived') && (
         <section className="section">
           <h2>底片保存</h2>
-          {roll.neg && (roll.neg.place || roll.neg.scanned) ? (
+          {(roll.neg && (roll.neg.place || roll.neg.scanned)) || frames.length ? (
             <div className="kv">
-              <Row k="位置" v={[roll.neg.place, roll.neg.slot].filter(Boolean).join(' · ') || '未记录'} />
-              <Row k="状态" v={COND_LABEL[roll.neg.condition ?? 'good']} tone={roll.neg.condition && roll.neg.condition !== 'good' ? 'warn' : undefined} />
-              <Row k="数字化" v={`${SCAN_LABEL[roll.neg.scanned ?? 'none']}${roll.neg.scanNote ? ' · ' + roll.neg.scanNote : ''}`} />
+              <Row k="位置" v={[roll.neg?.place, roll.neg?.slot].filter(Boolean).join(' · ') || '未记录'} />
+              <Row k="状态" v={COND_LABEL[roll.neg?.condition ?? 'good']} tone={roll.neg?.condition && roll.neg.condition !== 'good' ? 'warn' : undefined} />
+              <Row k="数字化" v={`${frames.length ? `已入库 ${frames.length} 张` : SCAN_LABEL[roll.neg?.scanned ?? 'none']}${roll.neg?.scanNote ? ' · ' + roll.neg.scanNote : ''}`} />
             </div>
           ) : (
             <p className="muted">还没记录这卷底片放在哪里。</p>

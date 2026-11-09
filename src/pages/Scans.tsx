@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { Develop } from '../components/Develop';
+import { exportRollScans } from '../lib/exportScans';
+import { saveBlob } from '../lib/contact';
 import { IndexExport } from '../components/IndexExport';
 import { DustDialog } from '../components/DustDialog';
 import { FilmProgress } from '../components/FilmProgress';
@@ -32,6 +34,7 @@ export default function Scans() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<View>('grid');
   const [exporting, setExporting] = useState(false);
+  const [packing, setPacking] = useState<{ done: number; total: number } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -98,6 +101,15 @@ export default function Scans() {
         <>
           <div className="row-btns spread">
             <Chips<View> value={view} onChange={setView} options={[{ value: 'grid', label: '网格' }, { value: 'index', label: '底片条' }]} />
+            <button className="btn small ghost" disabled={!!packing} onClick={async () => {
+              setPacking({ done: 0, total: frames.length });
+              try {
+                const { blob, name } = await exportRollScans(roll, frames, (done, total) => setPacking({ done, total }));
+                saveBlob(blob, name);
+                toast.show(`已导出 ${frames.length} 张，EXIF 已写入相机、片种、ISO、日期等`);
+              } catch { toast.show('导出失败', { tone: 'error' }); }
+              setPacking(null);
+            }}>{packing ? `打包 ${packing.done}/${packing.total}` : '导出带信息的扫描件'}</button>
             <button className="btn small ghost" onClick={() => setExporting(true)}>导出索引图</button>
           </div>
           {view === 'grid' ? (
