@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { Canister } from '../components/Canister';
+import { DigitalHero, isDigitized } from '../components/DigitalHero';
 import { PageHeader } from '../components/PageHeader';
 import { COND_LABEL, SCAN_LABEL, useSheets } from '../components/SheetHost';
 import { Chips, Empty } from '../components/ui';
@@ -20,6 +21,7 @@ export default function Negatives() {
   const [filter, setFilter] = useState<Filter>('all');
   const data = useLiveQuery(async () => ({
     rolls: await db.rolls.filter((r) => r.status === 'back' || r.status === 'archived').toArray(),
+    frames: await db.frames.toArray(),
     stocks: await db.stocks.toArray(),
   }), []);
 
@@ -28,7 +30,7 @@ export default function Negatives() {
     if (!data) return [];
     const list = data.rolls.filter((r) => {
       const n = r.neg;
-      if (filter === 'unscanned') return !n?.scanned || n.scanned === 'none';
+      if (filter === 'unscanned') return !isDigitized(r, new Set(data.frames.map((f) => f.rollId)));
       if (filter === 'noplace') return !n?.place;
       if (filter === 'bad') return !!n?.condition && n.condition !== 'good';
       return true;
@@ -45,15 +47,19 @@ export default function Negatives() {
 
   if (!data) return <div className="page" />;
   const total = data.rolls.length;
-  const scanned = data.rolls.filter((r) => r.neg?.scanned && r.neg.scanned !== 'none').length;
+  const frameCount = new Map<string, number>();
+  for (const f of data.frames) frameCount.set(f.rollId, (frameCount.get(f.rollId) ?? 0) + 1);
+  const frameRolls = new Set(frameCount.keys());
+  const scanned = data.rolls.filter((r) => isDigitized(r, frameRolls)).length;
 
   return (
     <div className="page">
-      <PageHeader title="底片柜" sub={`${total} 卷底片 · 已数字化 ${scanned} 卷`} back right={<button className="btn small" onClick={() => sheets.openPast()}>补录旧卷</button>} />
+      <PageHeader title="底片柜" sub={`${total} 卷底片 · 已数字化 ${scanned} 卷`} right={<button className="btn small" onClick={() => sheets.openPast()}>补录旧卷</button>} />
+      <DigitalHero rolls={data.rolls} frames={data.frames} />
       <Chips<Filter>
         value={filter}
         onChange={setFilter}
-        options={[{ value: 'all', label: '全部' }, { value: 'unscanned', label: '未扫描' }, { value: 'noplace', label: '没记位置' }, { value: 'bad', label: '状态不好' }]}
+        options={[{ value: 'all', label: '全部' }, { value: 'unscanned', label: '待数字化' }, { value: 'noplace', label: '没记位置' }, { value: 'bad', label: '状态不好' }]}
       />
       {groups.length === 0 ? (
         <Empty title={total ? '没有符合条件的底片' : '还没有冲洗完的底片'} text={total ? '换个筛选看看。' : '胶卷取回后，在卷详情里记录底片放在哪里；已有的旧胶卷可以先补录。'} />
@@ -82,7 +88,9 @@ export default function Negatives() {
                         {r.neg?.slot && <span>{r.neg.slot}</span>}
                       </div>
                     </div>
-                    <span className={`badge ${sc === 'none' ? '' : 'keep'}`}>{SCAN_LABEL[sc]}</span>
+                    {(frameCount.get(r.id) ?? 0) > 0
+                      ? <span className="badge keep">已数字化 · {frameCount.get(r.id)} 张</span>
+                      : <span className={`badge ${sc === 'none' ? '' : 'keep'}`}>{SCAN_LABEL[sc]}</span>}
                     {r.neg?.condition && r.neg.condition !== 'good' && <span className="badge txt-warn">{COND_LABEL[r.neg.condition]}</span>}
                   </motion.button>
                 );

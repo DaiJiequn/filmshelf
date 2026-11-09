@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { CountUp } from '../components/NumberRoll';
+import { DigitalHero } from '../components/DigitalHero';
 import { Canister } from '../components/Canister';
 import { PageHeader } from '../components/PageHeader';
 import { RollCard } from '../components/RollCard';
@@ -21,13 +22,13 @@ export default function Home() {
   const level = useMotionLevel();
   const [settings] = useSettings();
   const data = useLiveQuery(async () => {
-    const [cameras, rolls, stocks, visits, labs] = await Promise.all([
-      db.cameras.filter((c) => !c.retired).toArray(), db.rolls.toArray(), db.stocks.toArray(), db.labVisits.toArray(), db.labs.toArray(),
+    const [cameras, rolls, stocks, visits, labs, frames] = await Promise.all([
+      db.cameras.filter((c) => !c.retired).toArray(), db.rolls.toArray(), db.stocks.toArray(), db.labVisits.toArray(), db.labs.toArray(), db.frames.toArray(),
     ]);
-    return { cameras, rolls, stocks, visits, labs };
+    return { cameras, rolls, stocks, visits, labs, frames };
   }, []);
   if (!data) return <div className="page" />;
-  const { cameras, rolls, stocks, visits, labs } = data;
+  const { cameras, rolls, stocks, visits, labs, frames } = data;
   const stockOf = (id: string) => stocks.find((s) => s.id === id);
   const now = new Date();
 
@@ -72,6 +73,8 @@ export default function Home() {
         sub={`${now.getMonth() + 1} 月 ${now.getDate()} 日 · 库存 ${inStock.length} 卷`}
         right={<button className="btn small primary" onClick={() => sheets.openInStock()}>＋ 入库</button>}
       />
+
+      <DigitalHero rolls={rolls} frames={frames} strip />
 
       {backupDue && (
         <motion.div className="banner" {...list(0)}>
